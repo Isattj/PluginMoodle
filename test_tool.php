@@ -1,30 +1,26 @@
 <?php
-// test_tool.php fora do Moodle
+echo '<h2>Ferramenta LTI Recebeu os Dados!</h2>';
 
-echo "<h2>Ferramenta LTI Recebeu os Dados!</h2>";
+// 1) mostra todos os parâmetros POST
+echo '<h3>Parâmetros POST:</h3><pre>';
+print_r($_POST);
+echo '</pre>';
 
-if (!empty($_POST)) {
-    echo "<h3>Parâmetros POST recebidos:</h3>";
-    echo "<pre>";
-    print_r($_POST);
-    echo "</pre>";
-} else {
-    echo "<p>Nenhum parâmetro recebido no POST.</p>";
-}
+// 2) busca export_url enviado pelo Moodle
+if (!empty($_POST['custom_plugin_export_url'])) {
+    $url = $_POST['custom_plugin_export_url'];
+    echo '<h3>Buscando dados via export_url: '.$url.'</h3>';
 
-$data = $_POST['custom_data'] ?? null;
-
-if ($data) {
-    echo "<h3>Conteúdo de custom_data (JSON decodificado):</h3>";
-    $json = json_decode($data, true);
-    if ($json) {
-        echo '<pre>';
-        print_r($json);
-        echo '</pre>';
+    $json = @file_get_contents($url);
+    if ($json === false) {
+        echo "<p>Falha ao buscar $url</p>";
     } else {
-        echo "<p>Erro ao decodificar JSON.</p>";
+        $data = json_decode($json, true);
+        echo '<pre>';
+        print_r($data);
+        echo '</pre>';
     }
 } else {
-    echo "<p><strong>custom_data não foi enviado.</strong></p>";
+    echo '<p>Campo custom_plugin_export_url não enviado.</p>';
 }
-
+?>
