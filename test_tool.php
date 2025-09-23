@@ -2,14 +2,14 @@
 echo '<h1>Ferramenta externa</h1>';
 echo '<h2>Ferramenta LTI Recebeu os Dados!</h2>';
 
-// mostra parâmetros POST
 echo '<h3>Parâmetros POST:</h3><pre>';
 print_r($_POST);
 echo '</pre>';
 
-// busca export_url enviado pelo Moodle
-if (!empty($_POST['custom_plugin_export_url'])) {
-    $url = $_POST['custom_plugin_export_url'];
+$courseid = isset($_POST['context_id']) ? (int)$_POST['context_id'] : 0;
+
+if ($courseid) {
+    $url = "http://127.0.0.1/moodle/local/myplugin/export.php?courseid=$courseid";
     echo '<h3>Buscando dados via export_url: '.$url.'</h3>';
 
     $json = @file_get_contents($url);
@@ -26,5 +26,6 @@ if (!empty($_POST['custom_plugin_export_url'])) {
         }
     }
 } else {
-    echo '<p>Campo custom_plugin_export_url não enviado.</p>';
+    echo '<p>Não foi possível identificar o courseid.</p>';
 }
+

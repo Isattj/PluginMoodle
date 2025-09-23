@@ -1,35 +1,41 @@
 <?php
-// arquivo export.php público
-define('NO_DEBUG_DISPLAY', true); // opcional para evitar warnings
-require_once(__DIR__ . '/../../config.php'); // carrega Moodle
+define('NO_DEBUG_DISPLAY', true);
+require_once(__DIR__ . '/../../config.php');
+global $DB;
 
-global $DB, $SITE;
+$courseid = optional_param('courseid', 0, PARAM_INT);
 
-// coleta todos os cursos
-$courses = $DB->get_records('course', [], '', 'id, fullname, shortname, startdate, enddate');
+if (!$courseid && isset($_POST['context_id'])) {
+    $courseid = (int) $_POST['context_id'];
+}
 
-// coleta todos os usuários matriculados em algum curso
+if (!$courseid) {
+    echo json_encode(['error' => 'courseid não fornecido']);
+    exit;
+}
+
+$course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname, startdate, enddate', MUST_EXIST);
+
+
 $sql_users = "SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
               FROM {user} u
               JOIN {user_enrolments} ue ON ue.userid = u.id
-              JOIN {enrol} e ON e.id = ue.enrolid";
-$users = $DB->get_records_sql($sql_users);
+              JOIN {enrol} e ON e.id = ue.enrolid
+              WHERE e.courseid = :courseid";
+$users = $DB->get_records_sql($sql_users, ['courseid' => $courseid]);
 
-// coleta todas as notas
 $sql_grades = "SELECT g.id, g.userid, g.finalgrade, gi.itemname, gi.courseid
                FROM {grade_grades} g
-               JOIN {grade_items} gi ON g.itemid = gi.id";
-$grades = $DB->get_records_sql($sql_grades);
+               JOIN {grade_items} gi ON g.itemid = gi.id
+               WHERE gi.courseid = :courseid";
+$grades = $DB->get_records_sql($sql_grades, ['courseid' => $courseid]);
 
-// monta payload
 $data = [
-    'site' => isset($SITE->shortname) ? $SITE->shortname : 'unknown',
-    'timestamp' => time(),
-    'courses' => array_values($courses),
+    'course' => $course,
     'users' => array_values($users),
     'grades' => array_values($grades),
+    'timestamp' => time(),
 ];
 
-// exibe JSON
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
