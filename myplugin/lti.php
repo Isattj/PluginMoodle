@@ -33,7 +33,6 @@ if (!($launchurl && $key && $secret)) {
     exit;
 }
 
-
 $requestparams = [
     'resource_link_id'                 => $course->id,
     'resource_link_title'              => $course->fullname,
@@ -63,7 +62,6 @@ foreach ($parms as $k => $v) {
     echo '<input type="hidden" name="'.htmlspecialchars($k).'" value="'.htmlspecialchars($v).'">';
 }
 echo '</form>';
-
 echo '<script>
 setTimeout(function(){ 
     document.getElementById("ltiLaunchForm").submit(); 

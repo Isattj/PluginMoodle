@@ -16,7 +16,6 @@ if (!$courseid) {
 
 $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname, startdate, enddate', MUST_EXIST);
 
-
 $sql_users = "SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
               FROM {user} u
               JOIN {user_enrolments} ue ON ue.userid = u.id
