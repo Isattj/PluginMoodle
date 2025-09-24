@@ -29,8 +29,10 @@ Para conectar a ferramenta "test_tool.php" como LTI no nosso Moodle devemos segu
 
   3. Após isso adicione a atividade em algum curso em seu Moodle e abra a atividade.
 Ao abrir a atividade você será redirecionado para uma nova janela com todas as informações que foram passadas por meio da LTI pelo método POST.
-<img width="1042" height="662" alt="image" src="https://github.com/user-attachments/assets/94d7b9a1-eacf-416f-9e5d-c90311c9813a" />
+<img width="1047" height="645" alt="image" src="https://github.com/user-attachments/assets/40d97361-9d8f-4b58-bb15-0c8aadf89c2e" />
+
 
 
 E logo em abaixo podemos ver as informaçações do curso em que a ferramenta está configurada e que foram coletadas e enviadas para a ferramenta externa por meio do plugin.
-<img width="904" height="662" alt="image" src="https://github.com/user-attachments/assets/431d7068-5797-4ff2-8efa-8bbe27b64afc" />
+<img width="918" height="911" alt="image" src="https://github.com/user-attachments/assets/09cb1fc0-0dbc-4f81-82fe-895aca843cdd" />
+
