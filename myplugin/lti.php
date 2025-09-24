@@ -51,10 +51,6 @@ $accreq     = lti\OAuthRequest::from_consumer_and_token($consumer, '', 'POST', $
 $accreq->sign_request($hmacmethod, $consumer, '');
 $parms = $accreq->get_parameters();
 
-echo $OUTPUT->header();
-echo html_writer::tag('h2', 'LTI Debug — parâmetros enviados ao tool externo');
-echo '<p>launchurl: ' . s($launchurl) . '</p>';
-echo '<pre>'; print_r($parms); echo '</pre>';
 
 echo '<form action="'.htmlspecialchars($launchurl).'" method="POST" id="ltiLaunchForm">';
 foreach ($parms as $k => $v) {
