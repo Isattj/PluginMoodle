@@ -1,4 +1,4 @@
-<h1>Tutorial de implementação do plugin em uma ferramenta externa</h1>
+<h1>Tutorial de implementação do plugin em uma ferramenta externa e seu funcionamento</h1>
 O Código presente neste repositório possui um plugin genérico que pode ser instalado e utilizado pelo Moodle para obter informações sobre o curso em que a plataforma está conectada, além de fornecer dados sobre os usuários e grades da mesma.
 
 Para realizar a configuração do plugin dentro do Moodle siga os passos abaixo:
