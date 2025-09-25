@@ -5,12 +5,7 @@ global $DB;
 
 $userid = required_param('userid', PARAM_INT);
 
-$user = $DB->get_record('user', ['id' => $userid], 'id, username, firstname, lastname, email, firstaccess, lastlogin, currentlogin, profileimage', MUST_EXIST);
-
-$firstaccess= date('d/m/Y H:i:s', $user->firstaccess);
-$last_login = date('d/m/Y H:i:s', $user->lastlogin);
-$current_login = date('d/m/Y H:i:s', $user->currentlogin);
-$user->profileimage = $CFG->wwwroot . '/user/pix.php/' . $user->id . '/f1.jpg';
+$user = $DB->get_record('user', ['id' => $userid], 'id, username, firstname, lastname, email, firstaccess, lastlogin, currentlogin', MUST_EXIST);
 
 $sql_courses = "SELECT c.id, c.fullname, c.shortname, c.startdate, c.enddate, c.timemodified
                 FROM {course} c
@@ -75,6 +70,11 @@ foreach($courses as $course){
     }
 }
 
+
+$last_login = date('d/m/Y H:i:s', $user->lastlogin);
+$current_login = date('d/m/Y H:i:s', $user->currentlogin);
+$firstaccess= date('d/m/Y H:i:s', $user->firstaccess);
+$user->profileimage = $CFG->wwwroot . '/user/pix.php/' . $user->id . '/f1.jpg';
 
 $data = [
     'type'    => 'user',
