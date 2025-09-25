@@ -43,4 +43,6 @@ E logo em abaixo é possível visualizar dois tipos de informações coletadas p
   <img width="937" height="769" alt="image" src="https://github.com/user-attachments/assets/5d795807-b758-4052-a8e8-e5a710d44d83" />
 </ul>
 
+Link com as informações coletadas até agora e quais são possiveis de obter: https://www.notion.so/Plugin-Moodle-272bf1757bc980ec9dc9fc342288d681?source=copy_link
+
 
