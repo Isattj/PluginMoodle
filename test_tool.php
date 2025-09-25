@@ -7,12 +7,15 @@ print_r($_POST);
 echo '</pre>';
 
 $courseid = isset($_POST['context_id']) ? (int)$_POST['context_id'] : 0;
+$userid = (int)$_POST['user_id'];
 
 if ($courseid) {
-    $url = "http://127.0.0.1/moodle/local/myplugin/export.php?courseid=$courseid";
+    echo '<h3>Modo Curso</h3>';
+    $url = "http://127.0.0.1/moodle/local/myplugin/export_course.php?courseid=$courseid";
     echo '<h3>Buscando dados via export_url: '.$url.'</h3>';
 
     $json = @file_get_contents($url);
+
     if ($json === false) {
         echo "<p>Falha ao buscar $url</p>";
     } else {
@@ -22,6 +25,24 @@ if ($courseid) {
         } else {
             echo '<pre>';
             print_r($data);
+            echo '</pre>';
+        }
+    }
+
+    echo '<h3>Modo Usuário</h3>';
+    $url2 = "http://127.0.0.1/moodle/local/myplugin/export_user.php?userid=$userid";
+    echo '<h3>Buscando dados via export_url: '.$url2.'</h3>';
+
+        $json2 = @file_get_contents($url2);
+    if ($json2 === false) {
+        echo "<p>Falha ao buscar $url2</p>";
+    } else {
+        $data2 = json_decode($json2, true);
+        if ($data2 === null) {
+            echo "<p>Erro: JSON inválido</p><pre>$json</pre>";
+        } else {
+            echo '<pre>';
+            print_r($data2);
             echo '</pre>';
         }
     }
