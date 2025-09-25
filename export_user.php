@@ -5,10 +5,8 @@ global $DB;
 
 $userid = required_param('userid', PARAM_INT);
 
-// Pega dados do usuário
-$user = $DB->get_record('user', ['id' => $userid], 'id, username, firstname, lastname, email', MUST_EXIST);
+$user = $DB->get_record('user', ['id' => $userid], 'id, username, firstname, lastname, email, lastlogin, currentlogin', MUST_EXIST);
 
-// Pega cursos em que ele está matriculado
 $sql_courses = "SELECT c.id, c.fullname, c.shortname, c.startdate, c.enddate
                 FROM {course} c
                 JOIN {enrol} e ON e.courseid = c.id
@@ -16,7 +14,11 @@ $sql_courses = "SELECT c.id, c.fullname, c.shortname, c.startdate, c.enddate
                 WHERE ue.userid = :userid";
 $courses = $DB->get_records_sql($sql_courses, ['userid' => $userid]);
 
-// Pega notas dele em cada curso
+foreach($courses as $course){
+    $course->startdate = date('d/m/Y H:i:s', $course->startdate);
+    $course->enddate = date('d/m/Y H:i:s', $course->enddate);
+}
+
 $grades = [];
 foreach ($courses as $course) {
     $sql_grades = "SELECT g.id, g.finalgrade, gi.itemname, gi.courseid
@@ -37,7 +39,9 @@ foreach ($courses as $course) {
     }
 }
 
-// Monta payload
+$last_login = date('d/m/Y H:i:s', $user->lastlogin);
+$current_login = date('d/m/Y H:i:s', $user->currentlogin);
+
 $data = [
     'type'    => 'user',
     'userid'  => $user->id,
@@ -45,11 +49,12 @@ $data = [
     'firstname' => $user->firstname,
     'lastname'  => $user->lastname,
     'email'     => $user->email,
+    'lastlogin' => $last_login,
+    'currentlogin' => $current_login,
     'courses'   => array_values($courses),
     'grades'    => $grades,
     'timestamp' => time(),
 ];
 
-// Retorna JSON
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

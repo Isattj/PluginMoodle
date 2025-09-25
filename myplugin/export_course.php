@@ -1,6 +1,8 @@
 <?php
 define('NO_DEBUG_DISPLAY', true);
+
 require_once(__DIR__ . '/../../config.php');
+
 global $DB;
 
 $courseid = optional_param('courseid', 0, PARAM_INT);
@@ -16,12 +18,21 @@ if (!$courseid) {
 
 $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname, startdate, enddate', MUST_EXIST);
 
-$sql_users = "SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
+$course->startdate = date('d/m/Y H:i:s', $course->startdate);
+$course->enddate = date('d/m/Y H:i:s', $course->enddate);
+
+$sql_users = "SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin
               FROM {user} u
               JOIN {user_enrolments} ue ON ue.userid = u.id
               JOIN {enrol} e ON e.id = ue.enrolid
               WHERE e.courseid = :courseid";
 $users = $DB->get_records_sql($sql_users, ['courseid' => $courseid]);
+
+foreach($users as $user){
+    $user->lastlogin = date('d/m/Y H:i:s', $user->lastlogin);
+    $user->currentlogin = date('d/m/Y H:i:s', $user->currentlogin);
+}
+unset($user);
 
 $sql_grades = "SELECT g.id, g.userid, g.finalgrade, gi.itemname, gi.courseid
                FROM {grade_grades} g
