@@ -17,7 +17,7 @@ if (!$courseid) {
     exit;
 }
 
-$course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname, summary, startdate, enddate, timemodified', MUST_EXIST);
+$course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname, startdate, enddate, timemodified', MUST_EXIST);
 
 $course->startdate = date('d/m/Y H:i:s', $course->startdate);
 $course->enddate = date('d/m/Y H:i:s', $course->enddate);
@@ -50,17 +50,51 @@ $sql_grades = "SELECT g.id, g.userid, g.finalgrade, gi.itemname, gi.courseid
                WHERE gi.courseid = :courseid";
 $grades = $DB->get_records_sql($sql_grades, ['courseid' => $courseid]);
 
-$sql_activities = "SELECT cm.id, cm.instance, m.name, cm.completion, cm.visible
+$sql_activities = "SELECT cm.id as cmid, m.name as modulename, cm.visible
                    FROM {course_modules} cm
                    JOIN {modules} m ON m.id = cm.module
                    WHERE cm.course = :courseid";
-$activities = $DB->get_records_sql($sql_activities,['courseid' => $course->id]);
+$raw_activities = $DB->get_records_sql($sql_activities, ['courseid' => $course->id]);
+
+$activities = [];
+foreach ($raw_activities as $activity) {
+    $grade_item = $DB->get_record('grade_items', [
+        'iteminstance' => $activity->instance,
+        'itemmodule'   => $activity->modulename,
+        'courseid'     => $activity->course
+    ], 'grademax', IGNORE_MISSING);
+
+    $activity_data = [
+        'courseid'   => $course->id,
+        'cmid'       => $activity->cmid,
+        'modulename' => $activity->modulename,
+        'grade'      => $grade_item ? $grade_item->grademax : null,
+        'visible'    => $activity->visible,
+        'due_date'   => null
+    ];
+
+    if ($activity->modulename === 'assign') {
+        $assign = $DB->get_record('assign', ['id' => $activity->instance], 'duedate', IGNORE_MISSING);
+        if ($assign && $assign->duedate) {
+            $activity_data['due_date'] = date('d/m/Y H:i:s', $assign->duedate);
+        }
+    }
+
+    if ($activity->modulename === 'quiz') {
+        $quiz = $DB->get_record('quiz', ['id' => $activity->instance], 'timeclose', IGNORE_MISSING);
+        if ($quiz && $quiz->timeclose) {
+            $activity_data['due_date'] = date('d/m/Y H:i:s', $quiz->timeclose);
+        }
+    }
+
+    $activities[] = $activity_data;
+}
 
 $data = [
     'course' => $course,
     'users' => array_values($users),
     'grades' => array_values($grades),
-    'activities' => array_values($activities ),
+    'activities' => array_values($activities),
     'timestamp' => time(),
 ];
 
