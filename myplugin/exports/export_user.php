@@ -1,6 +1,6 @@
 <?php
 define('NO_DEBUG_DISPLAY', true);
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/../../../config.php');
 global $DB;
 
 $userid = required_param('userid', PARAM_INT);
@@ -49,26 +49,35 @@ foreach ($courses as $course) {
 
 $activities = [];
 foreach($courses as $course){
-    $sql_activities = "SELECT cm.id as cmid, m.name as modulename, cm.completion, cm.visible, cm.course
-                    FROM {course_modules} cm
-                    JOIN {modules} m ON m.id = cm.module
-                    WHERE cm.course = :courseid";
+    $sql_activities = "SELECT cm.id as cmid, cm.instance, m.name as modulename, cm.completion, cm.visible, cm.course
+                       FROM {course_modules} cm
+                       JOIN {modules} m ON m.id = cm.module
+                       WHERE cm.course = :courseid";
     $raw_activities = $DB->get_records_sql($sql_activities, ['courseid' => $course->id]);
-
-    $grade_item = $DB->get_record('grade_items', [
-        'iteminstance' => $activity->instance,
-        'itemmodule'   => $activity->modulename,
-        'courseid'     => $activity->course
-    ], 'grademax', IGNORE_MISSING);
     
     foreach ($raw_activities as $activity) {
+
+        $cmc = $DB->get_record('course_modules_completion', [
+            'coursemoduleid' => $activity->cmid,
+            'userid'        => $userid
+        ], '*', IGNORE_MISSING);
+
+        $grade_item = $DB->get_record('grade_items', [
+            'iteminstance' => $activity->instance,
+            'itemmodule'   => $activity->modulename,
+            'courseid'     => $activity->course
+        ], 'grademax', IGNORE_MISSING);
+    
         $activity_data = [
-            'courseid'   => $course->id,
-            'cmid'       => $activity->cmid,
-            'modulename' => $activity->modulename,
-            'completion' => $activity->completion,
-            'visible'    => $activity->visible,
-            'due_date'   => null
+            'courseid'     => $course->id,
+            'cmid'         => $activity->cmid,
+            'modulename'   => $activity->modulename,
+            'completion'   => $activity->completion,
+            'visible'      => $activity->visible,
+            'due_date'     => null,
+            'completion_state' => $cmc ? $cmc->completionstate : 0,
+            'time_completed'  => $cmc && $cmc->timecompleted ? date('d/m/Y H:i:s', $cmc->timecompleted) : null,
+            'last_viewed'     => $cmc && $cmc->viewed ? date('d/m/Y H:i:s', $cmc->viewed) : null
         ];
 
         if ($activity->modulename === 'assign') {

@@ -1,13 +1,12 @@
 <?php
 define('NO_DEBUG_DISPLAY', true);
 
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/../../../config.php');
 
 global $DB;
 
 $courseid = optional_param('courseid', 0, PARAM_INT);
 
-// se não veio pela URL, tenta pergar pelo POST LTI
 if (!$courseid && isset($_POST['context_id'])) {
     $courseid = (int) $_POST['context_id'];
 }
