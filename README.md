@@ -34,12 +34,12 @@ Ao abrir a atividade você será redirecionado para uma nova janela com todas as
 <img width="1047" height="645" alt="image" src="https://github.com/user-attachments/assets/40d97361-9d8f-4b58-bb15-0c8aadf89c2e" />
 
 
-E logo em abaixo é possível visualizar dois tipos de informações coletadas pelo plugin:
+E logo abaixo é possível visualizar dois tipos de informações coletadas pelo plugin:
 <ul>
   <li>As informações do curso em que a ferramenta está conectada:</li>
   <img width="989" height="953" alt="image" src="https://github.com/user-attachments/assets/b71201a2-17b3-4019-915c-40a16682146f" />
 
-  <li>As informações do usuário que está acesando a plataforma externa, assim como seus cursos e notas respectivas:</li>
+  <li>As informações do usuário que está acesando a plataforma externa, assim como seus respectivos cursos e notas:</li>
   <img width="937" height="769" alt="image" src="https://github.com/user-attachments/assets/5d795807-b758-4052-a8e8-e5a710d44d83" />
 </ul>
 
