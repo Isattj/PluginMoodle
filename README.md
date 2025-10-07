@@ -3,45 +3,31 @@ O Código presente neste repositório possui um plugin genérico que pode ser in
 
 Para realizar a configuração do plugin dentro do Moodle siga os passos abaixo:
   1. Copie a pasta "myplugin", presente neste repositório, e cole no seu diretório do Moodle no caminho "moodle/local/";
-  2. Deixe o arquivo "test_tool.php" fora do diretório do Moodle, em algum outro caminho;
-  3. No terminal, vá até o diretório onde está o arquivo "test_tool.php" e rode o arquivo por meio do comando: php -S localhost:8000
-  4. Abra o seu Moodle e faça a instalação deste plugin, adicionando o caminho onde o arquivo "test_tool.php" está rodando, uma chave e um segredo que quiser:
-     
-     <img width="1330" height="494" alt="image" src="https://github.com/user-attachments/assets/0b46916b-5e19-48d7-8849-86bd19c95ce2" />
+  2. Deixe o arquivo "index.php" fora do diretório do Moodle, em algum outro caminho;
+  3. No terminal, vá até o diretório onde está o arquivo "index.php" e rode o arquivo por meio do comando: php -S localhost:8000
+  4. Abra o seu Moodle e faça a instalação deste plugin. Não há necessidade de se configurar ou preencher algum campo a mais para realizar sua instalação.
 
-     
-Após a instalação e configuração do plugin no Moodle já é possível visualizar o formato que os dados são obtidos pelo plugin. É necessário somente acessar o link: [http://127.0.0.1/moodle/local/myplugin/export.php?courseid=COURSEID](http://127.0.0.1/moodle/local/myplugin/export.php?courseid=COURSEID), onde COURSEID é substituido pelo id do curso desejado.
-
-Para conectar a ferramenta "test_tool.php" como LTI no nosso Moodle devemos seguir esses passos:
+Para conectar a ferramenta "index.php" como LTI no nosso Moodle devemos seguir esses passos:
   1. No Moodle vá em Site Administration > Plugins > External Tools > Manage tools > configure a tool manually;
   2. Preencha os campos assim como na imagem abaixo:
-  <img width="1642" height="782" alt="image" src="https://github.com/user-attachments/assets/1c032496-4d74-494a-b895-7525d51792de" />
-  
+  <img width="1672" height="702" alt="image" src="https://github.com/user-attachments/assets/501c0c28-3554-4c76-8245-84e784e897c0" />
+
   <ul>
     <li><b>Tool name:</b> <i>Coloque o nome que desejar</i></li>
     <li><b>LTI version:</b> LTI 1.0/1.1</li>
-    <li><b>Consumer key:</b> <i>A mesma que foi colocada como chave da API na configuração do plugin</i></li>
-    <li><b>Share key:</b> <i>O mesmo que foi colocado como segredo da API na configuração do plugin</i></li>
+    <li><b>Consumer key:</b> <i>Coloque a consumer key que desejar</i></li>
+    <li><b>Shared secret:</b> <i>Coloque a shared secret que desejar</i></li>
     <li><b>Tool configuration usage:</b> Show in activity chooser and as a preconfigured tool</li>
     <li><b>Default launch container:</b> New window</li>
   </ul>
 
+Como a ferramenta externa irá receber as informações por meio da conexão com a LTI, e não acessando uma URL de um endpoint público, iremos utilizar a tecnologia de serviços do Moodle e seus tokens.
+Segue abaixo o tutorial da sua implementação:
+  1. Após a instalação do plugin no Moodle, vá para Site Administration > Server > Web services > Manage protocols;
+  2. Verifique se a opção REST protocol está ativada. Se não estiver, ative-a;
+     <img width="1645" height="251" alt="image" src="https://github.com/user-attachments/assets/180b8a03-f78c-4d55-bf34-d4b09038d2b9" />
 
-  3. Após isso adicione a atividade em algum curso em seu Moodle e abra a atividade.
-
-     
-Ao abrir a atividade você será redirecionado para uma nova janela com todas as informações que foram passadas por meio da LTI pelo método POST.
-<img width="1047" height="645" alt="image" src="https://github.com/user-attachments/assets/40d97361-9d8f-4b58-bb15-0c8aadf89c2e" />
-
-
-E logo abaixo é possível visualizar dois tipos de informações coletadas pelo plugin:
-<ul>
-  <li>As informações do curso em que a ferramenta está conectada:</li>
-  <img width="989" height="953" alt="image" src="https://github.com/user-attachments/assets/b71201a2-17b3-4019-915c-40a16682146f" />
-
-  <li>As informações do usuário que está acesando a plataforma externa, assim como seus respectivos cursos e notas:</li>
-  <img width="937" height="769" alt="image" src="https://github.com/user-attachments/assets/5d795807-b758-4052-a8e8-e5a710d44d83" />
-</ul>
+  4. Vá para Site Administration > Server > Web services > External services;
 
 Link com as informações coletadas até agora e quais são possiveis de obter: https://www.notion.so/Plugin-Moodle-272bf1757bc980ec9dc9fc342288d681?source=copy_link
 
