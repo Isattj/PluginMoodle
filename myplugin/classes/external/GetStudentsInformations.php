@@ -19,14 +19,22 @@ class GetStudentsInformations extends \core_external\external_api {
         return new external_multiple_structure(
             new external_single_structure(
                 [
-                    'userid' => new external_value(PARAM_INT, 'User ID'),
+                    'id' => new external_value(PARAM_INT, 'User ID'),
                     'username' => new external_value(PARAM_RAW, 'Username'),
-                    'firstname' => new external_value(PARAM_RAW, 'First name'),
-                    'lastname' => new external_value(PARAM_RAW, 'Last name'),
-                    'email' => new external_value(PARAM_RAW, 'Email'),
-                    'lastlogin' => new external_value(PARAM_INT, 'Last login timestamp'),
-                    'currentlogin' => new external_value(PARAM_INT, 'Current login timestamp'),
-                    'firstaccess' => new external_value(PARAM_INT, 'First access timestamp'),
+                    'firstname' => new external_value(PARAM_RAW, 'first name'),
+                    'lastname' => new external_value(PARAM_RAW, 'last name'),
+                    'email' => new external_value(PARAM_RAW, 'User email'),
+                    'lastlogin' => new external_value(PARAM_INT, 'User last login time'),
+                    'currentlogin' => new external_value(PARAM_INT, 'User current login time'),
+                    'firstaccess' => new external_value(PARAM_INT, 'User first access time'),
+                    'lastcourseaccess' => new external_value(PARAM_INT, 'User last access time in this course'),
+                    'profileimage' => new external_value(PARAM_RAW, 'User profile image'),
+                    'roles' => new external_multiple_structure(
+                        new external_single_structure([
+                            'roleid' => new external_value(PARAM_INT, 'Role ID'),
+                            'rolename' => new external_value(PARAM_RAW, 'Role name'),
+                        ]),
+                    )
                 ]
             )
         );
@@ -64,16 +72,26 @@ class GetStudentsInformations extends \core_external\external_api {
             $users = $DB->get_records_select('user', "id $sql", $params_sql, '', $fields);
         }
 
+        $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
+                'userid' => $u->id,
+                'courseid' => $course->id
+            ]) ?: 0;
+
+        $u->profileimage = $CFG->wwwroot . '/user/pix.php/' . $u->id . '/f1.jpg';
+
         foreach ($users as $user) {
             $result[] = [
-                'userid' => $user->id,
-                'username' => $user->username,
-                'firstname' => $user->firstname,
-                'lastname' => $user->lastname,
-                'email' => $user->email,
-                'lastlogin' => $user->lastlogin,
-                'currentlogin' => $user->currentlogin,
-                'firstaccess' => $user->firstaccess,
+                'id' => $u->id,
+                'username' => $u->username,
+                'firstname' => $u->firstname,
+                'lastname' => $u->lastname,
+                'email' => $u->email,
+                'lastlogin' => $u->lastlogin,
+                'currentlogin' => $u->currentlogin,
+                'firstaccess' => $u->firstaccess,
+                'lastcourseaccess' => $lastcourseaccess,
+                'profileimage' => $u->profileimage,
+                'roles' => $roles_data,
             ];
         }
         return $result;

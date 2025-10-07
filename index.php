@@ -2,52 +2,119 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-$user_id = $_POST['user_id'] ?? null;
-
-if (!$user_id) {
-    die(json_encode(['error' => 'Parâmetros LTI incompletos. User ID ausente.']));
-}
-
-$moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
-$token      = 'cd2eaeec09ee16da91b9221d4d9f0259';
-$function   = 'local_myplugin_get_courses_informations_by_user';
-
-$postfields = [
-    'wstoken' => $token,
-    'wsfunction' => $function,
-    'moodlewsrestformat' => 'json',
-    'userid' => $user_id,
+$endpoints = [
+    'core_grades_get_course_grades'     => 'local_myplugin_core_grades_get_course_grades',
+    'get_courses_informations_by_user'  => 'local_myplugin_get_courses_informations_by_user',
+    'get_quiz_questions'                => 'local_myplugin_get_quiz_questions',
+    'get_students_informations'         => 'local_myplugin_get_students_informations',
+    'get_users_roles'                   => 'local_myplugin_get_users_roles',
 ];
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $moodle_url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
+$response = null;
+$error = null;
 
-$response = curl_exec($ch);
-if ($response === false) {
-    die(json_encode(['error' => 'Erro CURL: ' . curl_error($ch)]));
+$user_id   = $_POST['user_id'] ?? null;
+$course_id = $_POST['course_id'] ?? ($_POST['context_id'] ?? null);
+$selected_endpoint = $_POST['endpoint'] ?? null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$user_id) {
+        $error = "Não foi possível identificar o usuário.";
+    } elseif (!$selected_endpoint || !isset($endpoints[$selected_endpoint])) {
+        $error = "Selecione um endpoint válido.";
+    } elseif (($selected_endpoint !== 'get_courses_by_user') && !$course_id) {
+        $error = "O endpoint não recebeu as informações necessárias";
+    }
+    
+    else {
+        $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
+        $token      = 'cd2eaeec09ee16da91b9221d4d9f0259';
+        $function   = $endpoints[$selected_endpoint];
+
+        $postfields = [
+            'wstoken' => $token,
+            'wsfunction' => $function,
+            'moodlewsrestformat' => 'json',
+        ];
+
+        switch ($selected_endpoint) {
+            case 'get_courses_informations_by_user':
+                $postfields['userid'] = $user_id;
+                break;
+
+            case 'core_grades_get_course_grades':
+            case 'get_quiz_questions':
+            case 'get_students_informations':
+                $postfields['courseid'] = $course_id;
+                break;
+
+            case 'get_users_roles':
+                $postfields['courseid'] = $course_id;
+                break;
+
+            default:
+                $error = "Endpoint não configurado corretamente.";
+                break;
 }
-curl_close($ch);
 
-$data = json_decode($response, true);
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $moodle_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
 
-if (isset($data['exception'])) {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'error' => true,
-        'message' => $data['message'] ?? 'Erro desconhecido no web service',
-        'debug' => $data,
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    exit;
+        $raw_response = curl_exec($ch);
+        if ($raw_response === false) {
+            $error = 'Erro CURL: ' . curl_error($ch);
+        } else {
+            $response = json_decode($raw_response, true);
+        }
+        curl_close($ch);
+    }
 }
+?>
 
-if (empty($data)) {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['message' => 'Nenhum curso encontrado para este usuário.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ferramenta Externa</title>
+</head>
+<body>
 
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+<h2>Ferramenta Externa</h2>
+
+
+<?php if ($user_id): ?>
+    <p><strong>Usuário logado:</strong> <?= htmlspecialchars($user_id) ?></p>
+<?php endif; ?>
+
+<form method="post">
+    <input type="hidden" name="user_id" value="<?= htmlspecialchars($user_id) ?>">
+    <?php if ($course_id): ?>
+        <input type="hidden" name="course_id" value="<?= htmlspecialchars($course_id) ?>">
+    <?php endif; ?>
+
+    <label>Escolha o endpoint:</label><br>
+    <select name="endpoint">
+        <option value="">  Selecione  </option>
+        <?php foreach ($endpoints as $key => $func): ?>
+            <option value="<?= $key ?>" <?= (($selected_endpoint ?? '') === $key) ? 'selected' : '' ?>>
+                <?= $func ?>
+            </option>
+        <?php endforeach; ?>
+    </select><br><br>
+
+    <button type="submit">Consultar</button>
+</form>
+
+
+<?php if ($error): ?>
+    <p style="color:red"><?= htmlspecialchars($error) ?></p>
+<?php endif; ?>
+
+<?php if ($response !== null): ?>
+    <h3>Resposta do Moodle:</h3>
+    <pre><?= json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></pre>
+<?php endif; ?>
+
+</body>
