@@ -2,11 +2,10 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Dados enviados via LTI
 $user_id = $_POST['user_id'] ?? null;
 
 if (!$user_id) {
-    die("Parâmetros LTI incompletos. User ID ausente.");
+    die(json_encode(['error' => 'Parâmetros LTI incompletos. User ID ausente.']));
 }
 
 $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
@@ -28,55 +27,27 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
 
 $response = curl_exec($ch);
 if ($response === false) {
-    die("Erro CURL: " . curl_error($ch));
+    die(json_encode(['error' => 'Erro CURL: ' . curl_error($ch)]));
 }
 curl_close($ch);
 
 $data = json_decode($response, true);
 
 if (isset($data['exception'])) {
-    echo "<h2>Erro no Web Service</h2>";
-    echo "<pre>" . print_r($data, true) . "</pre>";
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'error' => true,
+        'message' => $data['message'] ?? 'Erro desconhecido no web service',
+        'debug' => $data,
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 if (empty($data)) {
-    echo "<p>Nenhum curso encontrado para este usuário.</p>";
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['message' => 'Nenhum curso encontrado para este usuário.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-echo "<h1>Cursos em que o usuário está matriculado</h1>";
-
-foreach ($data as $course) {
-    echo "<h2>{$course['fullname']} ({$course['shortname']})</h2>";
-    echo "<p><strong>ID:</strong> {$course['id']} | ";
-    echo "<strong>Início:</strong> " . date('d/m/Y', $course['startdate']) . " | ";
-    echo "<strong>Última modificação:</strong> " . date('d/m/Y H:i', $course['timemodified']) . "</p>";
-
-    if (!empty($course['users'])) {
-        echo "<table border='1' cellpadding='5' cellspacing='0'>";
-        echo "<tr><th>User ID</th><th>Nome</th><th>Email</th><th>Funções</th></tr>";
-
-        foreach ($course['users'] as $user) {
-            $roles = array_map(function($r) {
-                return $r['rolename'];
-            }, $user['roles']);
-
-            $roles_str = implode(', ', $roles);
-
-            echo "<tr>";
-            echo "<td>{$user['id']}</td>";
-            echo "<td>{$user['fullname']}</td>";
-            echo "<td>{$user['email']}</td>";
-            echo "<td>{$roles_str}</td>";
-            echo "</tr>";
-        }
-
-        echo "</table>";
-    } else {
-        echo "<p>Nenhum usuário matriculado neste curso.</p>";
-    }
-
-    echo "<hr>";
-}
-?>
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
