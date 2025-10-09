@@ -47,9 +47,8 @@ class GetQuizQuestions extends external_api {
         );
     }
 
-
     public static function execute($courseid) {
-        global $DB, $COURSE;
+        global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
@@ -58,8 +57,6 @@ class GetQuizQuestions extends external_api {
         $context = context_course::instance($params['courseid']);
         self::validate_context($context);
         require_capability('mod/quiz:view', $context);
-
-        $quiz = $DB->get_record('quiz', ['id' => $params['quizid']], '*', MUST_EXIST);
 
         $sql = "
             SELECT 
@@ -72,9 +69,9 @@ class GetQuizQuestions extends external_api {
                 qa.id AS answerid,
                 qa.answer,
                 qa.fraction
-            FROM {quiz} q
-            JOIN {course_modules} cm ON cm.instance = q.id
+            FROM {course_modules} cm
             JOIN {modules} m ON m.id = cm.module AND m.name = 'quiz'
+            JOIN {quiz} q ON q.id = cm.instance
             JOIN {quiz_slots} qs ON qs.quizid = q.id
             JOIN {question_references} qr 
                 ON qr.itemid = qs.id 
@@ -87,17 +84,21 @@ class GetQuizQuestions extends external_api {
             ORDER BY q.id, qs.slot, qu.id, qa.id
         ";
 
-        $records = $DB->get_recordset_sql($sql, ['quizid' => $params['quizid']]);
+        $records = $DB->get_recordset_sql($sql, ['courseid' => $params['courseid']]);
 
-        $result = [];
-        $questions_map = [];
+        $quizzes_map = [];
+
         foreach ($records as $row) {
-            $quizid = $row->quizid;
-            $questionid = $row->questionid;
+            if (empty($row->quizid)) {
+                continue;
+            }
+
+            $quizid = (int)$row->quizid;
+            $questionid = (int)$row->questionid;
 
             if (!isset($quizzes_map[$quizid])) {
-                $questions_map[$quizid] = [
-                    'quizid' => (int)$quizid,
+                $quizzes_map[$quizid] = [
+                    'quizid' => $quizid,
                     'quizname' => $row->quizname ?? '',
                     'questions' => [],
                 ];
@@ -105,7 +106,7 @@ class GetQuizQuestions extends external_api {
 
             if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
                 $quizzes_map[$quizid]['questions'][$questionid] = [
-                    'questionid' => (int)$questionid,
+                    'questionid' => $questionid,
                     'questionname' => $row->questionname ?? '',
                     'qtype' => $row->questiontype ?? '',
                     'questiontext' => $row->questiontext ?? '',
@@ -123,6 +124,7 @@ class GetQuizQuestions extends external_api {
         }
         $records->close();
 
+        $result = [];
         foreach ($quizzes_map as $quiz) {
             $quiz['questions'] = array_values($quiz['questions']);
             $result[] = $quiz;
