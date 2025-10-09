@@ -56,9 +56,15 @@ Segue abaixo o tutorial da sua implementação:
     <li><b>Service: </b> Selecione o plugin "mypluginservice", referenciando que este token terá permissão de utilizar os serviços deste plugin.</li>
     <li><b>IP restriction: </b> <i>Deixe vazio.</i></li>
     <li><b>Valid until: </b> desmarque a opção enable, para garantir que o token não irá perder a validade.</li>
-    <li>Após clicar em "Save changes" ELe gerará um token. É muito importante que você copie-o pois ele será utilizado em nosso plugin.</li>
+    <li>Após clicar em "Save changes" um token será gerado. É muito importante que você copie-o pois ele será utilizado em nosso plugin.</li>
   </ul>
+
+  Para finalizar a configuração é necessário colocar o token gerado pelo Moodle no código da sua ferramenta externa, assim como é mostrado na imagem abaixo:
+  <img width="792" height="645" alt="image" src="https://github.com/user-attachments/assets/2283a94c-35e4-4f1d-a684-f841e744164c" />
 </ol>
+
+Dessa maneira seu plugin está totalmente configurado para fornecer dados para sua ferramenta externa!
+
 Link com as informações coletadas até agora e quais são possiveis de obter: https://www.notion.so/Plugin-Moodle-272bf1757bc980ec9dc9fc342288d681?source=copy_link
 
 
