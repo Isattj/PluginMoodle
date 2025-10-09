@@ -8,6 +8,7 @@ $endpoints = [
     'get_quiz_questions'                => 'local_myplugin_get_quiz_questions',
     'get_students_informations'         => 'local_myplugin_get_students_informations',
     'get_users_roles'                   => 'local_myplugin_get_users_roles',
+    'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
 ];
 
 $response = null;
@@ -28,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     else {
         $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
-        $token      = 'cd2eaeec09ee16da91b9221d4d9f0259';
+        $token      = 'da63da52f83da549032fb0bbc81ea619';
         $function   = $endpoints[$selected_endpoint];
 
         $postfields = [
@@ -41,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'get_courses_informations_by_user':
                 $postfields['userid'] = $user_id;
                 break;
-
+                
             case 'core_grades_get_course_grades':
             case 'get_quiz_questions':
             case 'get_students_informations':
