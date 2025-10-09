@@ -9,6 +9,7 @@ $endpoints = [
     'get_students_informations'         => 'local_myplugin_get_students_informations',
     'get_users_roles'                   => 'local_myplugin_get_users_roles',
     'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
+    'get_activities_by_course'          => 'local_myplugin_get_activities_by_course'
 ];
 
 $response = null;
@@ -46,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'core_grades_get_course_grades':
             case 'get_quiz_questions':
             case 'get_students_informations':
+            case 'get_activities_by_course':
                 $postfields['courseid'] = $course_id;
                 break;
 

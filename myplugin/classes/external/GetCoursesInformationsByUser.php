@@ -34,9 +34,9 @@ class GetCoursesInformationsByUser extends external_api {
                 'id' => new external_value(PARAM_INT, 'Course ID'),
                 'fullname' => new external_value(PARAM_RAW, 'Full course name'),
                 'shortname' => new external_value(PARAM_RAW, 'Short course name'),
-                'startdate' => new external_value(PARAM_INT, 'Course start date (timestamp)'),
-                'enddate' => new external_value(PARAM_INT, 'Course end date (timestamp)'),
-                'timemodified' => new external_value(PARAM_INT, 'Last modification time (timestamp)'),
+                'startdate' => new external_value(PARAM_RAW, 'Course start date (timestamp)'),
+                'enddate' => new external_value(PARAM_RAW, 'Course end date (timestamp)'),
+                'timemodified' => new external_value(PARAM_RAW, 'Last modification time (timestamp)'),
 
                 'users' => new external_multiple_structure(
                     new external_single_structure([
@@ -45,10 +45,10 @@ class GetCoursesInformationsByUser extends external_api {
                         'firstname' => new external_value(PARAM_RAW, 'first name'),
                         'lastname' => new external_value(PARAM_RAW, 'last name'),
                         'email' => new external_value(PARAM_RAW, 'User email'),
-                        'lastlogin' => new external_value(PARAM_INT, 'User last login time'),
-                        'currentlogin' => new external_value(PARAM_INT, 'User current login time'),
-                        'firstaccess' => new external_value(PARAM_INT, 'User first access time'),
-                        'lastcourseaccess' => new external_value(PARAM_INT, 'User last access time in this course'),
+                        'lastlogin' => new external_value(PARAM_RAW, 'User last login time'),
+                        'currentlogin' => new external_value(PARAM_RAW, 'User current login time'),
+                        'firstaccess' => new external_value(PARAM_RAW, 'User first access time'),
+                        'lastcourseaccess' => new external_value(PARAM_RAW, 'User last access time in this course'),
                         'profileimage' => new external_value(PARAM_RAW, 'User profile image'),
                         'roles' => new external_multiple_structure(
                             new external_single_structure([
@@ -79,6 +79,10 @@ public static function execute($userid) {
         $context = context_course::instance($course->id);
         $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess');
 
+        $course->startdate = date('d/m/Y H:i:s', $course->startdate);
+        $course->enddate = date('d/m/Y H:i:s', $course->enddate);
+        $course->timemodified = date('d/m/Y H:i:s', $course->timemodified);
+
         $users_data = [];
         foreach ($enrolled_users as $u) {
             $roles = get_user_roles($context, $u->id, true);
@@ -97,6 +101,10 @@ public static function execute($userid) {
             ]) ?: 0;
 
             $u->profileimage = $CFG->wwwroot . '/user/pix.php/' . $u->id . '/f1.jpg';
+            $u->lastlogin = date('d/m/Y H:i:s', $u->lastlogin);
+            $u->currentlogin = date('d/m/Y H:i:s', $u->currentlogin);
+            $u->firstaccess = date('d/m/Y H:i:s', $u->firstaccess);
+            $lastcourseaccess = date('d/m/Y H:i:s', $lastcourseaccess);
 
             $users_data[] = [
                 'id' => $u->id,

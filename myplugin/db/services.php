@@ -50,16 +50,36 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
+    'local_myplugin_get_activities_by_user' => [
+        'classname'   => 'local_myplugin\external\GetActivitiesByUser',
+        'methodname'  => 'execute',
+        'classpath'   => '',
+        'description' => 'Get activities by user',
+        'type'        => 'read',
+        'ajax'        => true,
+        'services'    => ['mypluginservice'],
+    ],
+    'local_myplugin_get_activities_by_course' => [
+        'classname'   => 'local_myplugin\external\GetActivitiesByCourse',
+        'methodname'  => 'execute',
+        'classpath'   => '',
+        'description' => 'Get activities by course',
+        'type'        => 'read',
+        'ajax'        => true,
+        'services'    => ['mypluginservice'],
+    ],
 ];
 
 $services = [
     'mypluginservice' => [
         'functions'       => [
-            'local_myplugin_core_grades_get_course_grades,
-            local_myplugin_get_students_informations,
-            local_myplugin_get_quiz_questions',
+            'local_myplugin_core_grades_get_course_grades',
+            'local_myplugin_get_students_informations',
+            'local_myplugin_get_quiz_questions',
             'local_myplugin_get_users_roles',
-            'local_myplugin_get_courses_informations_by_user'
+            'local_myplugin_get_courses_informations_by_user',
+            'local_myplugin_get_activities_by_user',
+            'local_myplugin_get_activities_by_course'
         ],
         'restrictedusers' => 0,
         'enable'          => 1,
