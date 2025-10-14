@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     else {
         $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
-        $token      = 'da63da52f83da549032fb0bbc81ea619';
+        $token      = '10b829c5fbaa7d7379007b48c087996a';
         $function   = $endpoints[$selected_endpoint];
 
         $postfields = [
