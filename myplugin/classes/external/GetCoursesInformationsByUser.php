@@ -181,6 +181,7 @@ public static function execute($userid) {
             'users' => $users_data,
         ];
     }
+
         return $result;
     }
 }
