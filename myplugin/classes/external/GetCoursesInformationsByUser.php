@@ -37,7 +37,18 @@ class GetCoursesInformationsByUser extends external_api {
                 'startdate' => new external_value(PARAM_RAW, 'Course start date (timestamp)'),
                 'enddate' => new external_value(PARAM_RAW, 'Course end date (timestamp)'),
                 'timemodified' => new external_value(PARAM_RAW, 'Last modification time (timestamp)'),
-
+                'tags' => new external_multiple_structure(
+                    new external_single_structure([
+                        'tagid' => new external_value(PARAM_INT, 'tag ID from course'),
+                        'tagname' => new external_value(PARAM_RAW, 'tag name from course'),
+                    ]),
+                ),
+                'competencies' => new external_multiple_structure(
+                    new external_single_structure([
+                        'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
+                        'competencyshortname' => new external_value(PARAM_RAW, 'Competency name'),
+                    ]),
+                ),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
                         'id' => new external_value(PARAM_INT, 'User ID'),
@@ -50,6 +61,12 @@ class GetCoursesInformationsByUser extends external_api {
                         'firstaccess' => new external_value(PARAM_RAW, 'User first access time'),
                         'lastcourseaccess' => new external_value(PARAM_RAW, 'User last access time in this course'),
                         'profileimage' => new external_value(PARAM_RAW, 'User profile image'),
+                        'tags' => new external_multiple_structure(
+                            new external_single_structure([
+                                'tagid' => new external_value(PARAM_INT, 'tag ID from user'),
+                                'tagname' => new external_value(PARAM_RAW, 'tag name from user'),
+                            ])
+                        ),
                         'roles' => new external_multiple_structure(
                             new external_single_structure([
                                 'roleid' => new external_value(PARAM_INT, 'Role ID'),
@@ -78,6 +95,27 @@ public static function execute($userid) {
     foreach ($courses as $course){
         $context = context_course::instance($course->id);
         $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess');
+        
+        $tags = \core_tag_tag::get_item_tags('core', 'course', $course->id);
+        $tags_data = [];
+        foreach ($tags as $tag) {
+            $tags_data[] = [
+                'tagid' => $tag->id,
+                'tagname' => $tag->get_display_name(),
+            ];
+        }
+
+        $competencies = \core_competency\api::list_course_competencies($course->id);
+        $competencies_data = [];
+
+        foreach ($competencies as $comp) {
+            if (!empty($comp->competency)) {
+                $competencies_data[] = [
+                    'competencyid' => $comp->competency->get_id(),
+                    'competencyshortname' => $comp->competency->get_shortname(),
+                ];
+            }
+        }
 
         $course->startdate = date('d/m/Y H:i:s', $course->startdate);
         $course->enddate = date('d/m/Y H:i:s', $course->enddate);
@@ -86,12 +124,21 @@ public static function execute($userid) {
         $users_data = [];
         foreach ($enrolled_users as $u) {
             $roles = get_user_roles($context, $u->id, true);
-            $roles_data = [];
+            $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
 
+            $roles_data = [];
             foreach ($roles as $r) {
                 $roles_data[] = [
                     'roleid' => $r->roleid,
                     'rolename' => $r->shortname,
+                ];
+            }
+
+            $tags_data_user = [];
+            foreach($tags_users as $tag_user){
+                $tags_data_user[] = [
+                    'tagid' => $tag_user->id,
+                    'tagname' => $tag_user->get_display_name(),
                 ];
             }
 
@@ -117,6 +164,7 @@ public static function execute($userid) {
                 'firstaccess' => $u->firstaccess,
                 'lastcourseaccess' => $lastcourseaccess,
                 'profileimage' => $u->profileimage,
+                'tags' => $tags_data_user,
                 'roles' => $roles_data,
             ];
         }
@@ -128,6 +176,8 @@ public static function execute($userid) {
             'startdate' => $course->startdate,
             'enddate' => $course->enddate,
             'timemodified' => $course->timemodified,
+            'tags' => $tags_data,
+            'competencies' => $competencies_data,
             'users' => $users_data,
         ];
     }
