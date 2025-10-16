@@ -34,6 +34,15 @@ class GetQuizQuestions extends external_api {
                     "Tags associadas ao quiz",
                     VALUE_OPTIONAL
                 ),
+                'quizcompetencies' => new external_multiple_structure(
+                    new external_single_structure([
+                        'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
+                        'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
+                        'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
+                    ]),
+                    "Competências relacionadas ao quiz",
+                    VALUE_OPTIONAL
+                ),
                 'questions' => new external_multiple_structure(
                     new external_single_structure([
                         'questionid' => new external_value(PARAM_INT, 'Question ID'),
@@ -81,6 +90,9 @@ class GetQuizQuestions extends external_api {
                 q.name AS quizname,
                 qt.tagid,
                 qt.tagname,
+                c.id AS competencyid,
+                c.shortname AS competencyname,
+                c.description AS competencydesc,
                 qu.id AS questionid,
                 qu.name AS questionname,
                 qu.qtype AS questiontype,
@@ -89,20 +101,18 @@ class GetQuizQuestions extends external_api {
                 qa.answer,
                 qa.fraction
             FROM {course_modules} cm
-            JOIN {modules} m ON m.id = cm.module 
-            AND m.name = 'quiz'
+            JOIN {modules} m ON m.id = cm.module AND m.name = 'quiz'
             JOIN {quiz} q ON q.id = cm.instance
             LEFT JOIN quiz_tags qt ON qt.cmid = cm.id
+            LEFT JOIN {competency_modulecomp} mc ON mc.cmid = cm.id
+            LEFT JOIN {competency} c ON c.id = mc.competencyid
             JOIN {quiz_slots} qs ON qs.quizid = q.id
-            JOIN {question_references} qr 
-                ON qr.itemid = qs.id 
-                AND qr.component = 'mod_quiz' 
-                AND qr.questionarea = 'slot'
+            JOIN {question_references} qr ON qr.itemid = qs.id AND qr.component = 'mod_quiz' AND qr.questionarea = 'slot'
             JOIN {question_versions} qv ON qv.questionbankentryid = qr.questionbankentryid
             JOIN {question} qu ON qu.id = qv.questionid
             LEFT JOIN {question_answers} qa ON qa.question = qu.id
             WHERE cm.course = :courseid
-            ORDER BY q.id, qs.slot, qu.id, qa.id;
+            ORDER BY q.id, qs.slot, qu.id, qa.id
         ";
 
         $records = $DB->get_recordset_sql($sql, ['courseid' => $params['courseid']]);
@@ -123,6 +133,7 @@ class GetQuizQuestions extends external_api {
                     'quizid' => $quizid,
                     'quizname' => $row->quizname ?? '',
                     'quiztags' => [],
+                    'quizcompetencies' => [],
                     'questions' => [],
                 ];
             }
@@ -131,6 +142,14 @@ class GetQuizQuestions extends external_api {
                 $quizzes_map[$quizid]['quiztags'][$row->tagid] = [
                     'tagid' => (int)$row->tagid,
                     'tagname' => $row->tagname ?? '',
+                ];
+            }
+
+            if (!is_null($row->competencyid)) {
+                $quizzes_map[$quizid]['quizcompetencies'][$row->competencyid] = [
+                    'competencyid' => (int)$row->competencyid,
+                    'competencyname' => $row->competencyname ?? '',
+                    'competencydesc' => $row->competencydesc ?? '',
                 ];
             }
 
@@ -161,6 +180,7 @@ class GetQuizQuestions extends external_api {
         $result = [];
         foreach ($quizzes_map as $quiz) {
             $quiz['quiztags'] = array_values($quiz['quiztags']);
+            $quiz['quizcompetencies'] = array_values($quiz['quizcompetencies']);
             foreach ($quiz['questions'] as &$question) {
                 unset($question['__addedanswers']);
                 $question['answers'] = array_values($question['answers']);
@@ -168,7 +188,6 @@ class GetQuizQuestions extends external_api {
             $quiz['questions'] = array_values($quiz['questions']);
             $result[] = $quiz;
         }
-
         return $result;
     }
 }
