@@ -55,7 +55,7 @@ class GetActivitiesByCourse extends external_api {
                 continue;
             }
 
-            $tags = \core_tag_tag::get_item_tags('core', 'activity', $cm->id);
+            $tags = \core_tag_tag::get_item_tags('mod_' . $cm->modname, $cm->modname, $cm->instance);
             $tags_data = [];
             foreach ($tags as $tag) {
                 $tags_data[] = [
