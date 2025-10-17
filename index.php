@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         switch ($selected_endpoint) {
             case 'get_courses_informations_by_user':
+            case 'get_activities_by_user':
                 $postfields['userid'] = $user_id;
                 break;
                 
