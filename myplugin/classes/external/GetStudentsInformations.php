@@ -29,6 +29,12 @@ class GetStudentsInformations extends \core_external\external_api {
                     'firstaccess' => new external_value(PARAM_RAW, 'User first access time'),
                     'lastcourseaccess' => new external_value(PARAM_RAW, 'User last access time in this course'),
                     'profileimage' => new external_value(PARAM_RAW, 'User last access time in this course'),
+                    'tags' => new external_multiple_structure(
+                        new external_single_structure([
+                            'tagid' => new external_value(PARAM_INT, 'Tag ID'),
+                            'tagname' => new external_value(PARAM_RAW, 'Tag name')
+                        ]),
+                    ),
                 ]
             )
         );
@@ -80,6 +86,16 @@ class GetStudentsInformations extends \core_external\external_api {
             $u->firstaccess = date('d/m/Y H:i:s', $u->firstaccess);
             $u->lastcourseaccess = date('d/m/Y H:i:s', $u->lastcourseaccess);
 
+            $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
+
+            $tags_data_user = [];
+            foreach($tags_users as $tag_user){
+                $tags_data_user[] = [
+                    'tagid' => $tag_user->id,
+                    'tagname' => $tag_user->get_display_name(),
+                ];
+            }
+
             $result[] = [
                 'id' => $u->id,
                 'username' => $u->username,
@@ -91,6 +107,7 @@ class GetStudentsInformations extends \core_external\external_api {
                 'firstaccess' => $u->firstaccess,
                 'lastcourseaccess' => $lastcourseaccess,
                 'profileimage' => $u->profileimage,
+                'tags' => $tags_data_user
             ];
         }
         return $result;
