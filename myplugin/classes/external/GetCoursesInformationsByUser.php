@@ -46,8 +46,9 @@ class GetCoursesInformationsByUser extends external_api {
                 'competencies' => new external_multiple_structure(
                     new external_single_structure([
                         'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
-                        'competencyshortname' => new external_value(PARAM_RAW, 'Competency name'),
-                    ]),
+                        'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
+                        'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
+                    ])
                 ),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
@@ -105,15 +106,20 @@ public static function execute($userid) {
             ];
         }
 
-        $competencies = \core_competency\api::list_course_competencies($course->id);
         $competencies_data = [];
+        $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
 
-        foreach ($competencies as $comp) {
-            if (!empty($comp->competency)) {
-                $competencies_data[] = [
-                    'competencyid' => $comp->competency->get_id(),
-                    'competencyshortname' => $comp->competency->get_shortname(),
-                ];
+        foreach ($competencymodule as $comp) {
+            $competencyid = $comp->competencyid ?? null;
+            if ($competencyid) {
+                $competency = $DB->get_record('competency', ['id' => $competencyid]);
+                if ($competency) {
+                    $competencies_data[] = [
+                        'competencyid' => (int)$competency->id,
+                        'competencyname' => $competency->shortname ?? $competency->name ?? 'Sem nome',
+                        'competencydesc' => $competency->description ?? '',
+                    ];
+                }
             }
         }
 

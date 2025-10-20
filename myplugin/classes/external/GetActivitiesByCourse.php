@@ -35,6 +35,13 @@ class GetActivitiesByCourse extends external_api {
                         'tagname' => new external_value(PARAM_RAW, 'tag name from activity'),
                     ]),
                 ),
+                'competencies' => new external_multiple_structure(
+                    new external_single_structure([
+                        'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
+                        'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
+                        'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
+                    ])
+                ),
             ])
         );
     }
@@ -62,6 +69,23 @@ class GetActivitiesByCourse extends external_api {
                     'tagid' => $tag->id,
                     'tagname' => $tag->get_display_name(),
                 ];
+            }
+
+            $competencies_data = [];
+            $competencymodule = $DB->get_records('competency_modulecomp', ['cmid' => $cm->id]);
+
+            foreach ($competencymodule as $comp) {
+                $competencyid = $comp->competencyid ?? null;
+                if ($competencyid) {
+                    $competency = $DB->get_record('competency', ['id' => $competencyid]);
+                    if ($competency) {
+                        $competencies_data[] = [
+                            'competencyid' => (int)$competency->id,
+                            'competencyname' => $competency->shortname ?? $competency->name ?? 'Sem nome',
+                            'competencydesc' => $competency->description ?? '',
+                        ];
+                    }
+                }
             }
 
             $activityname = $cm->get_formatted_name();
@@ -97,7 +121,8 @@ class GetActivitiesByCourse extends external_api {
                 'maxgrade' => $maxgrade,
                 'duedate' => $duedate,
                 'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
-                'tags' => $tags_data
+                'tags' => $tags_data,
+                'competencies' => $competencies_data
             ];
         }
         return $result;
