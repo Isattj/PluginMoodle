@@ -32,15 +32,7 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
-    'local_myplugin_get_users_roles' => [
-        'classname'   => 'local_myplugin\external\GetUsersRoles',
-        'methodname'  => 'execute',
-        'classpath'   => '',
-        'description' => 'Get users roles in a course',
-        'type'        => 'read',
-        'ajax'        => true,
-        'services'    => ['mypluginservice'],
-    ],
+    
     'local_myplugin_get_courses_informations_by_user' => [
         'classname'   => 'local_myplugin\external\GetCoursesInformationsByUser',
         'methodname'  => 'execute',
@@ -50,6 +42,17 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
+
+    'local_myplugin_get_competencies_by_user' => [
+        'classname'   => 'local_myplugin\external\GetCompetenciesByUser',
+        'methodname'  => 'execute',
+        'classpath'   => '',
+        'description' => 'Get competencies by user',
+        'type'        => 'read',
+        'ajax'        => true,
+        'services'    => ['mypluginservice'],
+    ],
+
     'local_myplugin_get_activities_by_user' => [
         'classname'   => 'local_myplugin\external\GetActivitiesByUser',
         'methodname'  => 'execute',
@@ -59,6 +62,7 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
+
     'local_myplugin_get_activities_by_course' => [
         'classname'   => 'local_myplugin\external\GetActivitiesByCourse',
         'methodname'  => 'execute',
@@ -76,7 +80,6 @@ $services = [
             'local_myplugin_core_grades_get_course_grades',
             'local_myplugin_get_students_informations',
             'local_myplugin_get_quiz_questions',
-            'local_myplugin_get_users_roles',
             'local_myplugin_get_courses_informations_by_user',
             'local_myplugin_get_activities_by_user',
             'local_myplugin_get_activities_by_course'
