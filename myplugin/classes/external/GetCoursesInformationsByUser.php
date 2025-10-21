@@ -74,6 +74,13 @@ class GetCoursesInformationsByUser extends external_api {
                                 'rolename' => new external_value(PARAM_RAW, 'Role name'),
                             ]),
                         ),
+                        'competencies' => new external_multiple_structure(
+                            new external_single_structure([
+                                'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
+                                'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
+                                'percentage' => new external_value(PARAM_FLOAT, 'Competency percentage', VALUE_OPTIONAL),
+                            ]),
+                        ),
                     ]),
                 ),
             ])
@@ -159,6 +166,26 @@ public static function execute($userid) {
             $u->firstaccess = date('d/m/Y H:i:s', $u->firstaccess);
             $lastcourseaccess = date('d/m/Y H:i:s', $lastcourseaccess);
 
+            $usercompetencies_data = [];
+            foreach($competencies_data as $comp){
+                $usercomp = $DB->get_record('competency_usercompcourse', [
+                    'userid' => $u->id,
+                    'courseid' => $course->id,
+                    'competencyid' => $comp['competencyid'],
+                ]);
+
+                $percentage = null;
+                if($usercomp){
+                    $percentage = isset($usercomp->grade) ? round($usercomp->grade * 100, 2) : null;
+                }
+
+                $usercompetencies_data[] = [
+                    'competencyid' => $comp['competencyid'],
+                    'competencyname' => $comp['competencyname'],
+                    'percentage' => $percentage,
+                ];
+            }
+        
             $users_data[] = [
                 'id' => $u->id,
                 'username' => $u->username,
@@ -172,6 +199,7 @@ public static function execute($userid) {
                 'profileimage' => $u->profileimage,
                 'tags' => $tags_data_user,
                 'roles' => $roles_data,
+                'competencies' => $usercompetencies_data,
             ];
         }
 
