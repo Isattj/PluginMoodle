@@ -62,12 +62,20 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
-
     'local_myplugin_get_activities_by_course' => [
         'classname'   => 'local_myplugin\external\GetActivitiesByCourse',
         'methodname'  => 'execute',
         'classpath'   => '',
         'description' => 'Get activities by course',
+        'type'        => 'read',
+        'ajax'        => true,
+        'services'    => ['mypluginservice'],
+    ],
+    'local_myplugin_get_logs_users' => [
+        'classname'   => 'local_myplugin\external\GetLogsUsers',
+        'methodname'  => 'execute',
+        'classpath'   => '',
+        'description' => 'Get logs by user',
         'type'        => 'read',
         'ajax'        => true,
         'services'    => ['mypluginservice'],
@@ -82,7 +90,8 @@ $services = [
             'local_myplugin_get_quiz_questions',
             'local_myplugin_get_courses_informations_by_user',
             'local_myplugin_get_activities_by_user',
-            'local_myplugin_get_activities_by_course'
+            'local_myplugin_get_activities_by_course',
+            'local_myplugin_get_logs_users',
         ],
         'restrictedusers' => 0,
         'enable'          => 1,
