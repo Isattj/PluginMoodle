@@ -8,7 +8,6 @@ $endpoints = [
     'get_competencies_by_user'          => 'local_myplugin_get_competencies_by_user',
     'get_quiz_questions'                => 'local_myplugin_get_quiz_questions',
     'get_students_informations'         => 'local_myplugin_get_students_informations',
-    'get_users_roles'                   => 'local_myplugin_get_users_roles',
     'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
     'get_activities_by_course'          => 'local_myplugin_get_activities_by_course',
     'get_logs_users'                    => 'local_myplugin_get_logs_users'
@@ -53,10 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'get_quiz_questions':
             case 'get_students_informations':
             case 'get_activities_by_course':
-                $postfields['courseid'] = $course_id;
-                break;
-
-            case 'get_users_roles':
                 $postfields['courseid'] = $course_id;
                 break;
 
