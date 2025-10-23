@@ -31,7 +31,7 @@ class GetCompetenciesByUser extends external_api {
     public static function execute_returns() {
         return new external_multiple_structure(
             new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
                 'fullname' => new external_value(PARAM_RAW, 'Full course name'),
                 'shortname' => new external_value(PARAM_RAW, 'Short course name'),
                 'competencies' => new external_multiple_structure(
@@ -43,7 +43,7 @@ class GetCompetenciesByUser extends external_api {
                 ),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
-                        'id' => new external_value(PARAM_INT, 'User ID'),
+                        'userid' => new external_value(PARAM_INT, 'User ID'),
                         'username' => new external_value(PARAM_RAW, 'Username'),
                         'firstname' => new external_value(PARAM_RAW, 'first name'),
                         'lastname' => new external_value(PARAM_RAW, 'last name'),
@@ -65,18 +65,25 @@ public static function execute($userid) {
     global $DB;
 
     $params = self::validate_parameters(self::execute_parameters(), ['userid' => $userid]);
-
     $usercontext = context_user::instance($params['userid']);
     self::validate_context($usercontext);
 
-
     $courses = enrol_get_users_courses($params['userid'], true, 'id, fullname, shortname, startdate, enddate, timemodified');
-
     $result = [];
 
     foreach ($courses as $course){
         $context = context_course::instance($course->id);
-        $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email');
+
+        $roleuser = get_user_roles($context, $params['userid'], true);
+        $rolenames = array_map(fn($r) => $r->shortname, $roleuser);
+
+        $canviewall = false;
+        foreach ($rolenames as $rolename) {
+            if (in_array($rolename, ['editingteacher', 'teacher', 'manager', 'admin'])) {
+                $canviewall = true;
+                break;
+            }
+        }
 
         $competencies_data = [];
         $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
@@ -96,7 +103,11 @@ public static function execute($userid) {
         }
 
         $users_data = [];
+        $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email');
         foreach ($enrolled_users as $u) {
+            if (!$canviewall && $u->id != $params['userid']) {
+                continue;
+            }
 
             $usercompetencies_data = [];
             foreach($competencies_data as $comp){
@@ -119,7 +130,7 @@ public static function execute($userid) {
             }
         
             $users_data[] = [
-                'id' => $u->id,
+                'userid' => $u->id,
                 'username' => $u->username,
                 'firstname' => $u->firstname,
                 'lastname' => $u->lastname,
@@ -129,7 +140,7 @@ public static function execute($userid) {
         }
 
         $result[] = [
-            'id' => $course->id,
+            'courseid' => $course->id,
             'fullname' => $course->fullname,
             'shortname' => $course->shortname,
             'competencies' => $competencies_data,

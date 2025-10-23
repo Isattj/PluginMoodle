@@ -108,7 +108,6 @@ public static function execute($userid) {
             }
         }
 
-        // Tags do curso
         $tags = \core_tag_tag::get_item_tags('core', 'course', $course->id);
         $tags_data = [];
         foreach ($tags as $tag) {
@@ -118,7 +117,6 @@ public static function execute($userid) {
             ];
         }
 
-        // Competências do curso
         $competencies_data = [];
         $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
         foreach ($competencymodule as $comp) {
