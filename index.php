@@ -3,7 +3,6 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 $endpoints = [
-    'core_grades_get_course_grades'     => 'local_myplugin_core_grades_get_course_grades',
     'get_courses_informations_by_user'  => 'local_myplugin_get_courses_informations_by_user',
     'get_competencies_by_user'          => 'local_myplugin_get_competencies_by_user',
     'get_quiz_questions'                => 'local_myplugin_get_quiz_questions',
@@ -48,7 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $postfields['userid'] = $user_id;
                 break;
                 
-            case 'core_grades_get_course_grades':
             case 'get_quiz_questions':
             case 'get_students_informations':
             case 'get_activities_by_course':

@@ -3,16 +3,6 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
-    'local_myplugin_core_grades_get_course_grades' => [
-        'classname'   => 'local_myplugin\external\CoreGradesGetCourseGrades', 
-        'methodname'  => 'execute',
-        'classpath'   => '',
-        'description' => 'Get course grades for users',
-        'type'        => 'read',
-        'ajax'        => true,
-        'services'    => ['mypluginservice'],
-    ],
-    
     'local_myplugin_get_students_informations' => [
         'classname'   => 'local_myplugin\external\GetStudentsInformations',
         'methodname'  => 'execute',
@@ -85,7 +75,6 @@ $functions = [
 $services = [
     'mypluginservice' => [
         'functions'       => [
-            'local_myplugin_core_grades_get_course_grades',
             'local_myplugin_get_students_informations',
             'local_myplugin_get_quiz_questions',
             'local_myplugin_get_courses_informations_by_user',
