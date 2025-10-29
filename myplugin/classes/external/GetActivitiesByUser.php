@@ -202,6 +202,9 @@ class GetActivitiesByUser extends external_api {
                             WHERE ag.assignment = ?
                             ", [$cm->instance]);
                         foreach ($grades as $g) {
+                            if (!$teacher && $g->userid != $params['userid']) {
+                                continue;
+                            }
                             $grades_data[] = [
                                 'userid' => (int)$g->userid,
                                 'username' => fullname($g),
@@ -218,6 +221,9 @@ class GetActivitiesByUser extends external_api {
                                 WHERE qg.quiz = ?
                             ", [$cm->instance]);
                             foreach ($grades as $g) {
+                                if (!$teacher && $g->userid != $params['userid']) {
+                                    continue;
+                                }
                                 $grades_data[] = [
                                     'userid' => (int)$g->userid,
                                     'username' => fullname($g),
@@ -236,6 +242,9 @@ class GetActivitiesByUser extends external_api {
                                     $item = reset($grades->items);
                                     if (!empty($item->grades)) {
                                         foreach ($item->grades as $userid => $gradeinfo) {
+                                            if (!$teacher && $userid != $params['userid']) {
+                                                continue;
+                                            }
                                             $user = $DB->get_record('user', ['id' => $userid], 'id, firstname, lastname');
                                             $grades_data[] = [
                                                 'userid' => (int)$userid,
