@@ -10,7 +10,6 @@ $endpoints = [
     'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
     'get_activities_by_course'          => 'local_myplugin_get_activities_by_course',
     'get_logs_users'                    => 'local_myplugin_get_logs_users',
-    'get_grade_from_courses'            => 'local_myplugin_get_grade_from_courses'
 ];
 
 $response = null;

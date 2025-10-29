@@ -53,6 +53,7 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
+
     'local_myplugin_get_activities_by_course' => [
         'classname'   => 'local_myplugin\external\GetActivitiesByCourse',
         'methodname'  => 'execute',
@@ -62,20 +63,12 @@ $functions = [
         'ajax'        => true,
         'services'    => ['mypluginservice'],
     ],
+    
     'local_myplugin_get_logs_users' => [
         'classname'   => 'local_myplugin\external\GetLogsUsers',
         'methodname'  => 'execute',
         'classpath'   => '',
         'description' => 'Get logs by user',
-        'type'        => 'read',
-        'ajax'        => true,
-        'services'    => ['mypluginservice'],
-    ],
-    'local_myplugin_get_grade_from_courses' => [
-        'classname'   => 'local_myplugin\external\GetGradeFromCourses',
-        'methodname'  => 'execute',
-        'classpath'   => '',
-        'description' => 'Get grades from courses',
         'type'        => 'read',
         'ajax'        => true,
         'services'    => ['mypluginservice'],
@@ -91,7 +84,6 @@ $services = [
             'local_myplugin_get_activities_by_user',
             'local_myplugin_get_activities_by_course',
             'local_myplugin_get_logs_users',
-            'local_myplugin_get_grade_from_courses',
         ],
         'restrictedusers' => 0,
         'enable'          => 1,
