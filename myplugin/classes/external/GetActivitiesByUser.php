@@ -122,10 +122,6 @@ class GetActivitiesByUser extends external_api {
                     continue;
                 }
 
-                if(!$teacher && in_array($cm->modname, ['quiz', 'lti'])){
-                    continue;
-                }
-
                 $tags = \core_tag_tag::get_item_tags('core', 'course_modules', $cm->id);
                 $tags_data = [];
                 foreach ($tags as $tag) {
@@ -158,6 +154,14 @@ class GetActivitiesByUser extends external_api {
 
                 $fs = get_file_storage();
                 $modcontext = context_module::instance($cm->id);
+
+                $available = null;
+                $timelimit = null;
+                $retake = null;
+                $maxattempts = null;
+                $usepassword = null;
+                $modattempts = null;
+                $grades_data = [];
 
                 $component = '';
                 $fileareas = [];
@@ -262,48 +266,49 @@ class GetActivitiesByUser extends external_api {
                         }
                         break;
 
-                        case 'quiz':
-                            $grades = $DB->get_records_sql("
-                                SELECT qg.userid, qg.grade, u.firstname, u.lastname
-                                FROM {quiz_grades} qg
-                                JOIN {user} u ON u.id = qg.userid
-                                WHERE qg.quiz = ?
-                            ", [$cm->instance]);
-                            foreach ($grades as $g) {
-                                if (!$teacher && $g->userid != $params['userid']) {
-                                    continue;
-                                }
-                                $grades_data[] = [
-                                    'userid' => (int)$g->userid,
-                                    'username' => fullname($g),
-                                    'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
-                                ];
+                    case 'quiz':
+                        $grades = $DB->get_records_sql("
+                            SELECT qg.userid, qg.grade, u.firstname, u.lastname
+                            FROM {quiz_grades} qg
+                            JOIN {user} u ON u.id = qg.userid
+                            WHERE qg.quiz = ?
+                        ", [$cm->instance]);
+                        foreach ($grades as $g) {
+                            if (!$teacher && $g->userid != $params['userid']) {
+                                continue;
                             }
-                            break;
-                        case 'lti':
-                            case 'resource':
-                            case 'page':
-                            case 'forum':
-                            case 'url':
-                            default:
-                                $grades = grade_get_grades($course->id, 'mod', $cm->modname, $cm->instance);
-                                if (!empty($grades->items)) {
-                                    $item = reset($grades->items);
-                                    if (!empty($item->grades)) {
-                                        foreach ($item->grades as $userid => $gradeinfo) {
-                                            if (!$teacher && $userid != $params['userid']) {
-                                                continue;
-                                            }
-                                            $user = $DB->get_record('user', ['id' => $userid], 'id, firstname, lastname');
-                                            $grades_data[] = [
-                                                'userid' => (int)$userid,
-                                                'username' => fullname($user),
-                                                'grade' => is_null($gradeinfo->grade) ? null : round((float)$gradeinfo->grade, 2)
-                                            ];
-                                        }
+                            $grades_data[] = [
+                                'userid' => (int)$g->userid,
+                                'username' => fullname($g),
+                                'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
+                            ];
+                        }
+                        break;
+
+                    case 'lti':
+                    case 'resource':
+                    case 'page':
+                    case 'forum':
+                    case 'url':
+                    default:
+                        $grades = grade_get_grades($course->id, 'mod', $cm->modname, $cm->instance);
+                        if (!empty($grades->items)) {
+                            $item = reset($grades->items);
+                            if (!empty($item->grades)) {
+                                foreach ($item->grades as $userid => $gradeinfo) {
+                                    if (!$teacher && $userid != $params['userid']) {
+                                        continue;
                                     }
+                                    $user = $DB->get_record('user', ['id' => $userid], 'id, firstname, lastname');
+                                    $grades_data[] = [
+                                        'userid' => (int)$userid,
+                                        'username' => fullname($user),
+                                        'grade' => is_null($gradeinfo->grade) ? null : round((float)$gradeinfo->grade, 2)
+                                    ];
                                 }
-                                break;
+                            }
+                        }
+                        break;
                 }
 
                 $result[] = [
