@@ -16,6 +16,20 @@ use moodle_url;
 
 class GetActivitiesByCourse extends external_api {
 
+    private static function remove_null_informations(array $data) {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::remove_null_informations($value);
+                if ($data[$key] === []) {
+                    unset($data[$key]);
+                }
+            } else if (is_null($value)) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     public static function execute_parameters() {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'Course ID')
@@ -32,7 +46,7 @@ class GetActivitiesByCourse extends external_api {
                 'moduletype' => new external_value(PARAM_RAW, 'Module type'),
                 'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade', VALUE_OPTIONAL),
                 'duedate' => new external_value(PARAM_RAW, 'Due date (if applicable)', VALUE_OPTIONAL),
-                'activitylink' => new external_value(PARAM_RAW, 'Link to activity'),
+                'activitylink' => new external_value(PARAM_RAW, 'Link to activity', VALUE_OPTIONAL),
                 'externallink' => new external_value(PARAM_RAW, 'Link to external resource', VALUE_OPTIONAL),
 
                 'files' => new external_multiple_structure(
@@ -41,7 +55,7 @@ class GetActivitiesByCourse extends external_api {
                         'url' => new external_value(PARAM_RAW, 'Direct file URL'),
                         'filesize' => new external_value(PARAM_INT, 'File size (bytes)'),
                     ]),
-                    'Files attached to the activity',
+                    'Files from activity',
                     VALUE_OPTIONAL
                 ),
                 'tags' => new external_multiple_structure(
@@ -49,13 +63,17 @@ class GetActivitiesByCourse extends external_api {
                         'tagid' => new external_value(PARAM_INT, 'tag ID from activity'),
                         'tagname' => new external_value(PARAM_RAW, 'tag name from activity'),
                     ]),
+                    'Tags from activity',
+                    VALUE_OPTIONAL
                 ),
                 'competencies' => new external_multiple_structure(
                     new external_single_structure([
                         'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
                         'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
                         'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
-                    ])
+                    ]),
+                    "Competencies from activity",
+                    VALUE_OPTIONAL
                 ),
                 'grades' => new external_multiple_structure(
                     new external_single_structure([
@@ -72,10 +90,18 @@ class GetActivitiesByCourse extends external_api {
 
     public static function execute($courseid) {
         global $DB, $CFG;
+        global $USER;
+        $userid = $USER->id;
 
         $params = self::validate_parameters(self::execute_parameters(), ['courseid' => $courseid]);
-        $context = context_course::instance($params['courseid']);
-        self::validate_context($context);
+        $coursecontext = context_course::instance($params['courseid']);
+        self::validate_context($coursecontext);
+
+        $roles = get_user_roles($coursecontext, $USER->id, true);
+        $rolenames = array_map(fn($r)=> $r->shortname, $roles);
+
+        $teacher = in_array('editingteacher', $rolenames) || in_array('teacher', $rolenames) || in_array('manager', $rolenames) || in_array('admin', $rolenames);
+        $student = in_array('student', $rolenames);
 
         $modinfo = get_fast_modinfo($params['courseid']);
         $course = $modinfo->get_course();
@@ -135,21 +161,43 @@ class GetActivitiesByCourse extends external_api {
                         $component = 'mod_resource';
                         $fileareas = ['content'];
                         break;
+
                     case 'page':
                         $component = 'mod_page';
                         $fileareas = ['content'];
                         break;
+
                     case 'forum':
                         $component = 'mod_forum';
                         $fileareas = ['intro'];
                         break;
+
                     case 'quiz':
                         $component = 'mod_quiz';
                         $fileareas = ['intro'];
                         break;
+
                     case 'url':
                         $component = 'mod_url';
                         $fileareas = ['intro'];
+                        break;
+
+                    case 'lesson':
+                        $component = 'mod_lesson';
+                        $fileareas = ['intro'];
+
+                        require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
+                        $lessoninfo = \local_myplugin\external\GetModLesson::execute($cm->instance, $course->id, $params['userid']);
+
+                        $maxgrade = $lessoninfo['maxgrade'] ?? null;
+                        $duedate = $lessoninfo['duedate'] ?? null;
+                        $available = $lessoninfo['available'] ?? null;
+                        $timelimit = $lessoninfo['timelimit'] ?? null;
+                        $retake = $lessoninfo['retake'] ?? null;
+                        $maxattempts = $lessoninfo['maxattempts'] ?? null;
+                        $usepassword = $lessoninfo['usepassword'] ?? null;
+                        $modattempts = $lessoninfo['modattempts'] ?? null;
+                        $grades_data = $lessoninfo['grades'] ?? [];
                         break;
                     default:
                         $component = 'mod_' . $cm->modname;
@@ -179,80 +227,103 @@ class GetActivitiesByCourse extends external_api {
                         }
                     }
 
-                $grades_data = [];
+                    $grades_data = [];
 
-                switch ($cm->modname){
-                    case 'assign':
-                        $grades = $DB->get_records_sql("
-                            SELECT ag.userid, ag.grade, u.firstname, u.lastname
-                            FROM {assign_grades} ag
-                            JOIN {user} u ON u.id = ag.userid
-                            WHERE ag.assignment = ?
-                            ", [$cm->instance]);
-                        foreach ($grades as $g) {
-                            $grades_data[] = [
-                                'userid' => (int)$g->userid,
-                                'username' => fullname($g),
-                                'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
-                            ];
-                        }
-                        break;
-
-                    case 'quiz':
-                        $grades = $DB->get_records_sql("
-                            SELECT qg.userid, qg.grade, u.firstname, u.lastname
-                            FROM {quiz_grades} qg
-                            JOIN {user} u ON u.id = qg.userid
-                            WHERE qg.quiz = ?
-                        ", [$cm->instance]);
-                        foreach ($grades as $g) {
-                            $grades_data[] = [
-                                'userid' => (int)$g->userid,
-                                'username' => fullname($g),
-                                'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
-                            ];
-                        }
-                        break;
-
-                    case 'lti':
-                        case 'resource':
-                        case 'page':
-                        case 'forum':
-                        case 'url':
-                        default:
-                            $grades = grade_get_grades($course->id, 'mod', $cm->modname, $cm->instance);
-                            if (!empty($grades->items)) {
-                                $item = reset($grades->items);
-                                if (!empty($item->grades)) {
-                                    foreach ($item->grades as $userid => $gradeinfo) {
-                                        $user = $DB->get_record('user', ['id' => $userid], 'id, firstname, lastname');
-                                        $grades_data[] = [
-                                            'userid' => (int)$userid,
-                                            'username' => fullname($user),
-                                            'grade' => is_null($gradeinfo->grade) ? null : round((float)$gradeinfo->grade, 2)
-                                        ];
-                                    }
-                                }
+                    switch ($cm->modname){
+                        case 'assign':
+                            if($student){
+                                $grades = $DB->get_records_sql("
+                                    SELECT ag.userid, ag.grade, u.firstname, u.lastname
+                                    FROM {assign_grades} ag
+                                    JOIN {user} u ON u.id = ag.userid
+                                    WHERE ag.assignment = ? AND ag.userid = ?
+                                ", [$cm->instance, $USER->id]);
+                            } else{
+                                $grades = $DB->get_records_sql("
+                                    SELECT ag.userid, ag.grade, u.firstname, u.lastname
+                                    FROM {assign_grades} ag
+                                    JOIN {user} u ON u.id = ag.userid
+                                    WHERE ag.assignment = ?
+                                ", [$cm->instance]);
+                            }
+                            foreach ($grades as $g) {
+                                $grades_data[] = [
+                                    'userid' => (int)$g->userid,
+                                    'username' => fullname($g),
+                                    'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
+                                ];
                             }
                             break;
+       
+                        case 'quiz':
+                            if ($student) {
+                                $grades = $DB->get_records_sql("
+                                    SELECT qg.userid, qg.grade, u.firstname, u.lastname
+                                    FROM {quiz_grades} qg
+                                    JOIN {user} u ON u.id = qg.userid
+                                    WHERE qg.quiz = ? AND qg.userid = ?
+                                ", [$cm->instance, $USER->id]);
+                            } else {
+                                $grades = $DB->get_records_sql("
+                                    SELECT qg.userid, qg.grade, u.firstname, u.lastname
+                                    FROM {quiz_grades} qg
+                                    JOIN {user} u ON u.id = qg.userid
+                                    WHERE qg.quiz = ?
+                                ", [$cm->instance]);
+                            }
+                            foreach ($grades as $g) {
+                                $grades_data[] = [
+                                    'userid' => (int)$g->userid,
+                                    'username' => fullname($g),
+                                    'grade' => is_null($g->grade) ? null : round((float)$g->grade, 2)
+                                ];
+                            }
+                            break;
+
+                    default:
+                        $grades = grade_get_grades($course->id, 'mod', $cm->modname, $cm->instance);
+                        if (!empty($grades->items)) {
+                            $item = reset($grades->items);
+                            if (!empty($item->grades)) {
+                                foreach ($item->grades as $uid => $gradeinfo) {
+                                    if ($student && $uid != $USER->id) {
+                                        continue;
+                                    }
+                                    $user = $DB->get_record('user', ['id' => $uid], 'id, firstname, lastname');
+                                    $grades_data[] = [
+                                        'userid' => (int)$uid,
+                                        'username' => fullname($user),
+                                        'grade' => is_null($gradeinfo->grade) ? null : round((float)$gradeinfo->grade, 2)
+                                    ];
+                                }
+                            }
+                        }
+                        break;
                 }
 
-            $result[] = [
-                'courseid' => $course->id,
-                'coursename' => $course->fullname,
-                'activityid' => $cm->id,
-                'activityname' => $activityname ?: 'A atividade não possui nome',
-                'moduletype' => $cm->modname,
-                'maxgrade' => $maxgrade,
-                'duedate' => $duedate,
-                'activitylink' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
-                'externallink' => $externallink,
-                'files' => $files_data,
-                'tags' => $tags_data,
-                'competencies' => $competencies_data,
-                'grades' => $grades_data
-            ];
+                $result[] = [
+                    'courseid' => $course->id,
+                    'coursename' => $course->fullname,
+                    'activityid' => $cm->id,
+                    'activityname' => $cm->get_formatted_name(),
+                    'moduletype' => $cm->modname,
+                    'maxgrade' => $maxgrade,
+                    'duedate' => $duedate,
+                    'available' => $available,
+                    'timelimit' => $timelimit,
+                    'retake' => $retake,
+                    'maxattempts' => $maxattempts,
+                    'usepassword' => $usepassword,
+                    'modattempts' => $modattempts,
+                    'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
+                    'files' => $files_data,
+                    'tags' => $tags_data,
+                    'competencies' => $competencies_data,
+                    'grades' => $grades_data
+                ];
         }
-        return $result;
+
+        $cleaned = array_map([self::class, 'remove_null_informations'], $result);
+        return $cleaned;
     }
 }

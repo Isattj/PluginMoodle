@@ -25,6 +25,20 @@ class GetCoursesInformationsByUser extends external_api {
         ]);
     }
 
+    private static function remove_null_informations(array $data) {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::remove_null_informations($value);
+                if ($data[$key] === []) {
+                    unset($data[$key]);
+                }
+            } else if (is_null($value)) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     public static function execute_returns() {
         return new external_multiple_structure(
             new external_single_structure([
@@ -38,14 +52,18 @@ class GetCoursesInformationsByUser extends external_api {
                     new external_single_structure([
                         'tagid' => new external_value(PARAM_INT, 'tag ID from course'),
                         'tagname' => new external_value(PARAM_RAW, 'tag name from course'),
-                    ])
+                    ]),
+                    'Tags from course',
+                    VALUE_OPTIONAL
                 ),
                 'competencies' => new external_multiple_structure(
                     new external_single_structure([
                         'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
                         'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
                         'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
-                    ])
+                    ]),
+                    'Competencies from course',
+                    VALUE_OPTIONAL
                 ),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
@@ -63,7 +81,9 @@ class GetCoursesInformationsByUser extends external_api {
                             new external_single_structure([
                                 'tagid' => new external_value(PARAM_INT, 'tag ID from user'),
                                 'tagname' => new external_value(PARAM_RAW, 'tag name from user'),
-                            ])
+                            ]),
+                            'Tags from user',
+                            VALUE_OPTIONAL
                         ),
                         'roles' => new external_multiple_structure(
                             new external_single_structure([
@@ -76,7 +96,9 @@ class GetCoursesInformationsByUser extends external_api {
                                 'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
                                 'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
                                 'percentage' => new external_value(PARAM_FLOAT, 'Competency percentage', VALUE_OPTIONAL),
-                            ])
+                            ]),
+                            'Competencies from user',
+                            VALUE_OPTIONAL
                         ),
                     ])
                 ),
@@ -84,144 +106,145 @@ class GetCoursesInformationsByUser extends external_api {
         );
     }
 
-public static function execute($userid) {
-    global $DB, $USER, $CFG;
+    public static function execute($userid) {
+        global $DB, $USER, $CFG;
 
-    $params = self::validate_parameters(self::execute_parameters(), ['userid' => $userid]);
-    $usercontext = context_user::instance($params['userid']);
-    self::validate_context($usercontext);
+        $params = self::validate_parameters(self::execute_parameters(), ['userid' => $userid]);
+        $usercontext = context_user::instance($params['userid']);
+        self::validate_context($usercontext);
 
-    $courses = enrol_get_users_courses($params['userid'], true, 'id, fullname, shortname, startdate, enddate, timemodified');
-    $result = [];
+        $courses = enrol_get_users_courses($params['userid'], true, 'id, fullname, shortname, startdate, enddate, timemodified');
+        $result = [];
 
-    foreach ($courses as $course) {
-        $context = context_course::instance($course->id);
+        foreach ($courses as $course) {
+            $context = context_course::instance($course->id);
 
-        $roleuser = get_user_roles($context, $params['userid'], true);
-        $rolenames = array_map(fn($r) => $r->shortname, $roleuser);
+            $roleuser = get_user_roles($context, $params['userid'], true);
+            $rolenames = array_map(fn($r) => $r->shortname, $roleuser);
 
-        $canviewall = false;
-        foreach ($rolenames as $rolename) {
-            if (in_array($rolename, ['editingteacher', 'teacher', 'manager', 'admin'])) {
-                $canviewall = true;
-                break;
-            }
-        }
-
-        $tags = \core_tag_tag::get_item_tags('core', 'course', $course->id);
-        $tags_data = [];
-        foreach ($tags as $tag) {
-            $tags_data[] = [
-                'tagid' => $tag->id,
-                'tagname' => $tag->get_display_name(),
-            ];
-        }
-
-        $competencies_data = [];
-        $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
-        foreach ($competencymodule as $comp) {
-            $competency = $DB->get_record('competency', ['id' => $comp->competencyid]);
-            if ($competency) {
-                $competencies_data[] = [
-                    'competencyid' => (int)$competency->id,
-                    'competencyname' => $competency->shortname ?? $competency->name ?? 'Sem nome',
-                    'competencydesc' => $competency->description ?? '',
-                ];
-            }
-        }
-
-        $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess');
-        $users_data = [];
-
-        foreach ($enrolled_users as $u) {
-            if (!$canviewall && $u->id != $params['userid']) {
-                continue;
+            $canviewall = false;
+            foreach ($rolenames as $rolename) {
+                if (in_array($rolename, ['editingteacher', 'teacher', 'manager', 'admin'])) {
+                    $canviewall = true;
+                    break;
+                }
             }
 
-            $roles = get_user_roles($context, $u->id, true);
-            $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
-
-            $roles_data = [];
-            foreach ($roles as $r) {
-                $roles_data[] = [
-                    'roleid' => $r->roleid,
-                    'rolename' => $r->shortname,
+            $tags = \core_tag_tag::get_item_tags('core', 'course', $course->id);
+            $tags_data = [];
+            foreach ($tags as $tag) {
+                $tags_data[] = [
+                    'tagid' => $tag->id,
+                    'tagname' => $tag->get_display_name(),
                 ];
             }
 
-            $tags_data_user = [];
-            foreach ($tags_users as $t) {
-                $tags_data_user[] = [
-                    'tagid' => $t->id,
-                    'tagname' => $t->get_display_name(),
-                ];
+            $competencies_data = [];
+            $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
+            foreach ($competencymodule as $comp) {
+                $competency = $DB->get_record('competency', ['id' => $comp->competencyid]);
+                if ($competency) {
+                    $competencies_data[] = [
+                        'competencyid' => (int)$competency->id,
+                        'competencyname' => $competency->shortname ?? $competency->name ?? 'Sem nome',
+                        'competencydesc' => $competency->description ?? '',
+                    ];
+                }
             }
 
-            $usercompetencies_data = [];
-            foreach ($competencies_data as $comp) {
-                $usercomp = $DB->get_record('competency_usercompcourse', [
-                    'userid' => $u->id,
-                    'courseid' => $course->id,
-                    'competencyid' => $comp['competencyid'],
-                ]);
+            $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess');
+            $users_data = [];
 
-                $percentage = null;
-                if ($usercomp && isset($usercomp->grade)) {
-                    $percentage = round($usercomp->grade * 100, 2);
+            foreach ($enrolled_users as $u) {
+                if (!$canviewall && $u->id != $params['userid']) {
+                    continue;
                 }
 
-                $usercompetencies_data[] = [
-                    'competencyid' => $comp['competencyid'],
-                    'competencyname' => $comp['competencyname'],
-                    'percentage' => $percentage,
+                $roles = get_user_roles($context, $u->id, true);
+                $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
+
+                $roles_data = [];
+                foreach ($roles as $r) {
+                    $roles_data[] = [
+                        'roleid' => $r->roleid,
+                        'rolename' => $r->shortname,
+                    ];
+                }
+
+                $tags_data_user = [];
+                foreach ($tags_users as $t) {
+                    $tags_data_user[] = [
+                        'tagid' => $t->id,
+                        'tagname' => $t->get_display_name(),
+                    ];
+                }
+
+                $usercompetencies_data = [];
+                foreach ($competencies_data as $comp) {
+                    $usercomp = $DB->get_record('competency_usercompcourse', [
+                        'userid' => $u->id,
+                        'courseid' => $course->id,
+                        'competencyid' => $comp['competencyid'],
+                    ]);
+
+                    $percentage = null;
+                    if ($usercomp && isset($usercomp->grade)) {
+                        $percentage = round($usercomp->grade * 100, 2);
+                    }
+
+                    $usercompetencies_data[] = [
+                        'competencyid' => $comp['competencyid'],
+                        'competencyname' => $comp['competencyname'],
+                        'percentage' => $percentage,
+                    ];
+                }
+
+                $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
+                    'userid' => $u->id,
+                    'courseid' => $course->id
+                ]) ?: 0;
+
+                $user_data = [
+                    'id' => $u->id,
+                    'username' => $u->username,
+                    'firstname' => $u->firstname,
+                    'lastname' => $u->lastname,
+                    'email' => $u->email,
+                    'profileimage' => $CFG->wwwroot . '/user/pix.php/' . $u->id . '/f1.jpg',
+                    'tags' => $tags_data_user,
+                    'roles' => $roles_data,
+                    'competencies' => $usercompetencies_data,
                 ];
+
+                if ($canviewall) {
+                    $user_data['lastlogin'] = date('d/m/Y H:i:s', $u->lastlogin);
+                    $user_data['currentlogin'] = date('d/m/Y H:i:s', $u->currentlogin);
+                    $user_data['firstaccess'] = date('d/m/Y H:i:s', $u->firstaccess);
+                    $user_data['lastcourseaccess'] = date('d/m/Y H:i:s', $lastcourseaccess);
+                }
+
+                $users_data[] = $user_data;
             }
 
-            $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
-                'userid' => $u->id,
-                'courseid' => $course->id
-            ]) ?: 0;
-
-            $user_data = [
-                'id' => $u->id,
-                'username' => $u->username,
-                'firstname' => $u->firstname,
-                'lastname' => $u->lastname,
-                'email' => $u->email,
-                'profileimage' => $CFG->wwwroot . '/user/pix.php/' . $u->id . '/f1.jpg',
-                'tags' => $tags_data_user,
-                'roles' => $roles_data,
-                'competencies' => $usercompetencies_data,
+            $course_data = [
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'tags' => $tags_data,
+                'competencies' => $competencies_data,
+                'users' => $users_data,
             ];
 
             if ($canviewall) {
-                $user_data['lastlogin'] = date('d/m/Y H:i:s', $u->lastlogin);
-                $user_data['currentlogin'] = date('d/m/Y H:i:s', $u->currentlogin);
-                $user_data['firstaccess'] = date('d/m/Y H:i:s', $u->firstaccess);
-                $user_data['lastcourseaccess'] = date('d/m/Y H:i:s', $lastcourseaccess);
+                $course_data['startdate'] = date('d/m/Y H:i:s', $course->startdate);
+                $course_data['enddate'] = date('d/m/Y H:i:s', $course->enddate);
+                $course_data['timemodified'] = date('d/m/Y H:i:s', $course->timemodified);
             }
 
-            $users_data[] = $user_data;
+            $result[] = $course_data;
         }
 
-        $course_data = [
-            'id' => $course->id,
-            'fullname' => $course->fullname,
-            'shortname' => $course->shortname,
-            'tags' => $tags_data,
-            'competencies' => $competencies_data,
-            'users' => $users_data,
-        ];
-
-        if ($canviewall) {
-            $course_data['startdate'] = date('d/m/Y H:i:s', $course->startdate);
-            $course_data['enddate'] = date('d/m/Y H:i:s', $course->enddate);
-            $course_data['timemodified'] = date('d/m/Y H:i:s', $course->timemodified);
-        }
-
-        $result[] = $course_data;
+        $cleaned = array_map([self::class, 'remove_null_informations'], $result);
+        return $cleaned;
     }
-
-    return $result;
-}
 }

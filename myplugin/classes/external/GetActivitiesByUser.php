@@ -17,6 +17,20 @@ use moodle_url;
 
 class GetActivitiesByUser extends external_api {
 
+    private static function remove_null_informations(array $data) {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::remove_null_informations($value);
+                if ($data[$key] === []) {
+                    unset($data[$key]);
+                }
+            } else if (is_null($value)) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     public static function execute_parameters() {
         return new external_function_parameters([
             'userid' => new external_value(PARAM_INT, 'user ID')
@@ -50,6 +64,8 @@ class GetActivitiesByUser extends external_api {
                         'tagid' => new external_value(PARAM_INT, 'tag ID from activity'),
                         'tagname' => new external_value(PARAM_RAW, 'tag name from activity'),
                     ]),
+                    'Tags from activity',
+                    VALUE_OPTIONAL
                 ),
 
                 'competencies' => new external_multiple_structure(
@@ -57,7 +73,9 @@ class GetActivitiesByUser extends external_api {
                         'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
                         'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
                         'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
-                    ])
+                    ]),
+                    'Competencies from activity',
+                    VALUE_OPTIONAL
                 ),
                 'grades' => new external_multiple_structure(
                     new external_single_structure([
@@ -68,6 +86,12 @@ class GetActivitiesByUser extends external_api {
                     'Grades from enrolled users in this activity',
                     VALUE_OPTIONAL
                 ),
+                'available' => new external_value(PARAM_RAW, 'Available date', VALUE_OPTIONAL),
+                'timelimit' => new external_value(PARAM_RAW, 'Time limit (HH:MM:SS)', VALUE_OPTIONAL),
+                'retake' => new external_value(PARAM_BOOL, 'Whether the lesson can be retaken', VALUE_OPTIONAL),
+                'maxattempts' => new external_value(PARAM_INT, 'Maximum attempts', VALUE_OPTIONAL),
+                'usepassword' => new external_value(PARAM_BOOL, 'Whether the lesson is password-protected', VALUE_OPTIONAL),
+                'modattempts' => new external_value(PARAM_BOOL, 'Whether multiple attempts per question are allowed', VALUE_OPTIONAL),
             ])
         );
     }
@@ -143,29 +167,54 @@ class GetActivitiesByUser extends external_api {
                         $component = 'mod_assign';
                         $fileareas = ['intro', 'introattachment'];
                     break;
+
                     case 'resource':
                         $component = 'mod_resource';
                         $fileareas = ['content'];
                         break;
+
                     case 'page':
                         $component = 'mod_page';
                         $fileareas = ['content'];
                         break;
+
                     case 'forum':
                         $component = 'mod_forum';
                         $fileareas = ['intro'];
                         break;
+
                     case 'quiz':
                         $component = 'mod_quiz';
                         $fileareas = ['intro'];
                         break;
+
                     case 'url':
                         $component = 'mod_url';
                         $fileareas = ['intro'];
                         break;
+
+                    case 'lesson':
+                        $component = 'mod_lesson';
+                        $fileareas = ['intro'];
+
+                        require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
+                        $lessoninfo = \local_myplugin\external\GetModLesson::execute($cm->instance, $course->id, $params['userid']);
+
+                        $maxgrade = $lessoninfo['maxgrade'] ?? null;
+                        $duedate = $lessoninfo['duedate'] ?? null;
+                        $available = $lessoninfo['available'] ?? null;
+                        $timelimit = $lessoninfo['timelimit'] ?? null;
+                        $retake = $lessoninfo['retake'] ?? null;
+                        $maxattempts = $lessoninfo['maxattempts'] ?? null;
+                        $usepassword = $lessoninfo['usepassword'] ?? null;
+                        $modattempts = $lessoninfo['modattempts'] ?? null;
+                        $grades_data = $lessoninfo['grades'] ?? [];
+                        break;
+
                     default:
                         $component = 'mod_' . $cm->modname;
                         $fileareas = ['intro'];
+                        break;
                 }
 
                 $files_data = [];
@@ -265,6 +314,12 @@ class GetActivitiesByUser extends external_api {
                     'moduletype' => $cm->modname,
                     'maxgrade' => $maxgrade,
                     'duedate' => $duedate,
+                    'available' => $available,
+                    'timelimit' => $timelimit,
+                    'retake' => $retake,
+                    'maxattempts' => $maxattempts,
+                    'usepassword' => $usepassword,
+                    'modattempts' => $modattempts,
                     'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
                     'files' => $files_data,
                     'tags' => $tags_data,
@@ -273,6 +328,7 @@ class GetActivitiesByUser extends external_api {
                 ];
             }
         }
-        return $result;
+        $cleaned = array_map([self::class, 'remove_null_informations'], $result);
+        return $cleaned;
     }
 }
