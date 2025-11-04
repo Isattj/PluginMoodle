@@ -30,12 +30,12 @@ class GetLogsUsers extends external_api {
     public static function execute_returns() {
         return new external_multiple_structure(
             new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
                 'fullname' => new external_value(PARAM_RAW, 'Full course name'),
                 'shortname' => new external_value(PARAM_RAW, 'Short course name'),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
-                        'id' => new external_value(PARAM_INT, 'User ID'),
+                        'userid' => new external_value(PARAM_INT, 'User ID'),
                         'username' => new external_value(PARAM_RAW, 'Username'),
                         'firstname' => new external_value(PARAM_RAW, 'First name'),
                         'lastname' => new external_value(PARAM_RAW, 'Last name'),
@@ -57,7 +57,7 @@ class GetLogsUsers extends external_api {
     }
 
     public static function execute($userid) {
-        global $DB;
+        global $DB, $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), ['userid' => $userid]);
         $usercontext = context_user::instance($params['userid']);
@@ -68,17 +68,39 @@ class GetLogsUsers extends external_api {
 
         foreach ($courses as $course) {
             $context = context_course::instance($course->id);
-            $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email');
 
-            $users_data = [];
+            $roles = get_user_roles($context, $params['userid']);
+            $rolenames = array_map(fn($r) => $r->shortname, $roles);
+
+            $canviewall = false;
+            foreach($rolenames as $r){
+                if(in_array($r, ['editingteacher', 'teacher', 'manager', 'admin'])){
+                    $canviewall = true;
+                    break;
+                }
+            }
+
+            if($canviewall){
+                $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email');
+            } else{
+                $enrolled_users = [
+                    $DB->get_record('user', [
+                        'id' => $params['userid']
+                    ], 'id, username, firstname, lastname, email')
+                ];
+            }
+           $users_data = [];
 
             foreach ($enrolled_users as $u) {
                 $sql = "SELECT id, eventname, component, action, target, timecreated
-                    FROM {logstore_standard_log}
-                    WHERE courseid = :courseid AND userid = :userid
-                    ORDER BY timecreated DESC";
-
-                $logs = $DB->get_records_sql($sql, ['courseid' => $course->id, 'userid' => $u->id], 0, 10);
+                        FROM {logstore_standard_log}
+                        WHERE courseid = :courseid AND userid = :userid
+                        ORDER BY timecreated DESC";
+                
+                $logs = $DB->get_records_sql($sql, [
+                    'courseid' => $course->id,
+                    'userid' => $u->id
+                ], 0, 10);
 
                 $logs_data = [];
                 foreach ($logs as $log) {
@@ -88,12 +110,12 @@ class GetLogsUsers extends external_api {
                         'component' => $log->component ?? '',
                         'action' => $log->action ?? '',
                         'target' => $log->target ?? '',
-                        'timecreated' =>  date('d/m/Y H:i:s', $log->timecreated),
+                        'timecreated' => date('d/m/Y H:i:s', $log->timecreated),
                     ];
                 }
 
                 $users_data[] = [
-                    'id' => $u->id,
+                    'userid' => $u->id,
                     'username' => $u->username,
                     'firstname' => $u->firstname,
                     'lastname' => $u->lastname,
@@ -103,12 +125,13 @@ class GetLogsUsers extends external_api {
             }
 
             $result[] = [
-                'id' => $course->id,
+                'courseid' => $course->id,
                 'fullname' => $course->fullname,
                 'shortname' => $course->shortname,
                 'users' => $users_data,
             ];
         }
+
         return $result;
     }
 }

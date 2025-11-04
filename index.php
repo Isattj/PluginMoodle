@@ -3,34 +3,38 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 $endpoints = [
-    'get_courses_informations_by_user'  => 'local_myplugin_get_courses_informations_by_user',
+    'get_activities_by_course'          => 'local_myplugin_get_activities_by_course',
+    'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
     'get_competencies_by_user'          => 'local_myplugin_get_competencies_by_user',
+    'get_courses_informations_by_user'  => 'local_myplugin_get_courses_informations_by_user',
+    'get_logs_users'                    => 'local_myplugin_get_logs_users',
     'get_quiz_questions'                => 'local_myplugin_get_quiz_questions',
     'get_students_informations'         => 'local_myplugin_get_students_informations',
-    'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
-    'get_activities_by_course'          => 'local_myplugin_get_activities_by_course',
-    'get_logs_users'                    => 'local_myplugin_get_logs_users',
 ];
+
+$user_id = $_POST['user_id'] ?? null;
+$course_id = $_POST['course_id'] 
+    ?? $_POST['context_id'] 
+    ?? $_POST['custom_course_id'] 
+    ?? null;
+$roles = $_POST['roles'] ?? '';
+$lis_name = $_POST['lis_person_name_full'] ?? "Usuário desconhecido";
+$email = $_POST['lis_person_contact_email_primary'] ?? '';
 
 $response = null;
 $error = null;
-
-$user_id   = $_POST['user_id'] ?? null;
-$course_id = $_POST['course_id'] ?? ($_POST['context_id'] ?? null);
 $selected_endpoint = $_POST['endpoint'] ?? null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
     if (!$user_id) {
         $error = "Não foi possível identificar o usuário.";
     } elseif (!$selected_endpoint || !isset($endpoints[$selected_endpoint])) {
         $error = "Selecione um endpoint válido.";
-    } elseif (($selected_endpoint !== 'get_courses_by_user') && !$course_id) {
-        $error = "O endpoint não recebeu as informações necessárias";
-    }
-    
-    else {
+    } elseif (in_array($selected_endpoint, ['get_students_informations', 'get_activities_by_course', 'get_quiz_questions']) && !$course_id) {
+        $error = "Este endpoint precisa de um course_id.";
+    } else {
         $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
-        $token      = '10b829c5fbaa7d7379007b48c087996a';
+        $token      = 'e80add3248622ab3eaf3aa1f7c0f89da';
         $function   = $endpoints[$selected_endpoint];
 
         $postfields = [
@@ -40,37 +44,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
 
         switch ($selected_endpoint) {
-            case 'get_courses_informations_by_user':
-            case 'get_competencies_by_user':
             case 'get_activities_by_user':
-            case 'get_logs_users':
                 $postfields['userid'] = $user_id;
+                $postfields['realuserid'] = $user_id;
                 break;
                 
-            case 'get_quiz_questions':
             case 'get_students_informations':
             case 'get_activities_by_course':
                 $postfields['courseid'] = $course_id;
+                $postfields['realuserid'] = $user_id;
                 break;
-
+            case 'get_competencies_by_user':
+            case 'get_courses_informations_by_user':
+            case 'get_logs_users':
+                $postfields['userid'] = $user_id;
+                break;
+            case 'get_quiz_questions':
+                $postfields['courseid'] = $course_id;
+                break;
             default:
                 $error = "Endpoint não configurado corretamente.";
                 break;
-}
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $moodle_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-
-        $raw_response = curl_exec($ch);
-        if ($raw_response === false) {
-            $error = 'Erro CURL: ' . curl_error($ch);
-        } else {
-            $response = json_decode($raw_response, true);
         }
-        curl_close($ch);
+
+        if(!$error){
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $moodle_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
+    
+            $raw_response = curl_exec($ch);
+            if ($raw_response === false) {
+                $error = 'Erro CURL: ' . curl_error($ch);
+            } else {
+                $response = json_decode($raw_response, true);
+            }
+            curl_close($ch);
+        }
     }
 }
 ?>

@@ -50,8 +50,8 @@ class GetCoursesInformationsByUser extends external_api {
                 'timemodified' => new external_value(PARAM_RAW, 'Last modification time', VALUE_OPTIONAL),
                 'tags' => new external_multiple_structure(
                     new external_single_structure([
-                        'tagid' => new external_value(PARAM_INT, 'tag ID from course'),
-                        'tagname' => new external_value(PARAM_RAW, 'tag name from course'),
+                        'tagid' => new external_value(PARAM_INT, 'Tag ID from course'),
+                        'tagname' => new external_value(PARAM_RAW, 'Tag name from course'),
                     ]),
                     'Tags from course',
                     VALUE_OPTIONAL
@@ -79,8 +79,8 @@ class GetCoursesInformationsByUser extends external_api {
                         'lastcourseaccess' => new external_value(PARAM_RAW, 'User last course access', VALUE_OPTIONAL),
                         'tags' => new external_multiple_structure(
                             new external_single_structure([
-                                'tagid' => new external_value(PARAM_INT, 'tag ID from user'),
-                                'tagname' => new external_value(PARAM_RAW, 'tag name from user'),
+                                'tagid' => new external_value(PARAM_INT, 'Tag ID from user'),
+                                'tagname' => new external_value(PARAM_RAW, 'Tag name from user'),
                             ]),
                             'Tags from user',
                             VALUE_OPTIONAL
@@ -109,7 +109,17 @@ class GetCoursesInformationsByUser extends external_api {
     public static function execute($userid) {
         global $DB, $USER, $CFG;
 
+        require_once("$CFG->libdir/enrollib.php");
+
+        $realuser = \core\session\manager::get_realuser();
+        $currentuser = $realuser ?? $USER;
+
         $params = self::validate_parameters(self::execute_parameters(), ['userid' => $userid]);
+
+        if ($currentuser->id != $params['userid'] && !is_siteadmin($currentuser)) {
+            throw new \moodle_exception('nopermissions', 'error', '', null, 'Você não pode acessar dados de outro usuário.');
+        }
+
         $usercontext = context_user::instance($params['userid']);
         self::validate_context($usercontext);
 
@@ -131,13 +141,10 @@ class GetCoursesInformationsByUser extends external_api {
             }
 
             $tags = \core_tag_tag::get_item_tags('core', 'course', $course->id);
-            $tags_data = [];
-            foreach ($tags as $tag) {
-                $tags_data[] = [
-                    'tagid' => $tag->id,
-                    'tagname' => $tag->get_display_name(),
-                ];
-            }
+            $tags_data = array_map(fn($tag) => [
+                'tagid' => $tag->id,
+                'tagname' => $tag->get_display_name(),
+            ], $tags);
 
             $competencies_data = [];
             $competencymodule = $DB->get_records('competency_coursecomp', ['courseid' => $course->id]);
@@ -152,7 +159,9 @@ class GetCoursesInformationsByUser extends external_api {
                 }
             }
 
-            $enrolled_users = get_enrolled_users($context, '', 0, 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess');
+            $enrolled_users = get_enrolled_users($context, '', 0,
+                'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess'
+            );
             $users_data = [];
 
             foreach ($enrolled_users as $u) {
@@ -163,21 +172,15 @@ class GetCoursesInformationsByUser extends external_api {
                 $roles = get_user_roles($context, $u->id, true);
                 $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
 
-                $roles_data = [];
-                foreach ($roles as $r) {
-                    $roles_data[] = [
-                        'roleid' => $r->roleid,
-                        'rolename' => $r->shortname,
-                    ];
-                }
+                $roles_data = array_map(fn($r) => [
+                    'roleid' => $r->roleid,
+                    'rolename' => $r->shortname,
+                ], $roles);
 
-                $tags_data_user = [];
-                foreach ($tags_users as $t) {
-                    $tags_data_user[] = [
-                        'tagid' => $t->id,
-                        'tagname' => $t->get_display_name(),
-                    ];
-                }
+                $tags_data_user = array_map(fn($t) => [
+                    'tagid' => $t->id,
+                    'tagname' => $t->get_display_name(),
+                ], $tags_users);
 
                 $usercompetencies_data = [];
                 foreach ($competencies_data as $comp) {
@@ -186,11 +189,7 @@ class GetCoursesInformationsByUser extends external_api {
                         'courseid' => $course->id,
                         'competencyid' => $comp['competencyid'],
                     ]);
-
-                    $percentage = null;
-                    if ($usercomp && isset($usercomp->grade)) {
-                        $percentage = round($usercomp->grade * 100, 2);
-                    }
+                    $percentage = isset($usercomp->grade) ? round($usercomp->grade * 100, 2) : null;
 
                     $usercompetencies_data[] = [
                         'competencyid' => $comp['competencyid'],
@@ -201,7 +200,7 @@ class GetCoursesInformationsByUser extends external_api {
 
                 $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
                     'userid' => $u->id,
-                    'courseid' => $course->id
+                    'courseid' => $course->id,
                 ]) ?: 0;
 
                 $user_data = [
@@ -244,7 +243,6 @@ class GetCoursesInformationsByUser extends external_api {
             $result[] = $course_data;
         }
 
-        $cleaned = array_map([self::class, 'remove_null_informations'], $result);
-        return $cleaned;
+        return array_map([self::class, 'remove_null_informations'], $result);
     }
 }
