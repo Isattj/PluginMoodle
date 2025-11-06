@@ -88,8 +88,27 @@ class GetActivitiesByCourse extends external_api {
                 'timelimit'   => new external_value(PARAM_RAW, 'Time limit (HH:MM:SS)', VALUE_OPTIONAL),
                 'retake'      => new external_value(PARAM_BOOL, 'Whether the lesson can be retaken', VALUE_OPTIONAL),
                 'maxattempts' => new external_value(PARAM_INT, 'Maximum attempts', VALUE_OPTIONAL),
-                'usepassword' => new external_value(PARAM_BOOL, 'Whether the lesson is password-protected', VALUE_OPTIONAL),
                 'modattempts' => new external_value(PARAM_BOOL, 'Whether multiple attempts per question are allowed', VALUE_OPTIONAL),
+                'pages' => new external_multiple_structure(
+                    new external_single_structure([
+                        'pageid' => new external_value(PARAM_INT, 'Page id'),
+                        'title' => new external_value(PARAM_RAW, 'Page title'),
+                        'content' => new external_value(PARAM_RAW, 'Page content'),
+                        'prevpageid' => new external_value(PARAM_INT, 'Previous page id', VALUE_OPTIONAL),
+                        'nextpageid' => new external_value(PARAM_INT, 'Next page id', VALUE_OPTIONAL),
+                    ]),
+                    'Pages from lesson activity',
+                    VALUE_OPTIONAL
+                ),       
+                'time' => new external_multiple_structure(
+                    new external_single_structure([
+                        'userid' => new external_value(PARAM_INT, 'User ID'),
+                        'starttime' => new external_value(PARAM_RAW, 'Parameter start time'),
+                        'endtime' => new external_value(PARAM_RAW, 'Parameter end time'),
+                    ]),
+                    'Time parameters from lesson activity',
+                    VALUE_OPTIONAL
+                ),
             ])
         );
     }
@@ -173,8 +192,10 @@ class GetActivitiesByCourse extends external_api {
             $timelimit = null;
             $retake = null;
             $maxattempts = null;
-            $usepassword = null;
             $modattempts = null;
+            $pages_data = [];
+            $time_data = [];
+            $grades_data = [];
 
             $component = '';
             $fileareas = [];
@@ -210,14 +231,55 @@ class GetActivitiesByCourse extends external_api {
                     if (file_exists($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php')) {
                         require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
                         $lessoninfo = \local_myplugin\external\GetModLesson::execute($cm->instance, $params['courseid'], $effectiveUser->id);
+
                         $maxgrade = $lessoninfo['maxgrade'] ?? $maxgrade;
                         $duedate = $lessoninfo['duedate'] ?? $duedate;
                         $available = $lessoninfo['available'] ?? null;
                         $timelimit = $lessoninfo['timelimit'] ?? null;
                         $retake = $lessoninfo['retake'] ?? null;
                         $maxattempts = $lessoninfo['maxattempts'] ?? null;
-                        $usepassword = $lessoninfo['usepassword'] ?? null;
                         $modattempts = $lessoninfo['modattempts'] ?? null;
+
+                        $pages = $DB->get_records('lesson_pages', ['lessonid' => $cm->instance]);
+                        $pages_data = [];
+
+                        foreach($pages as $page){
+                            $clean_content = str_replace(["\r", "\n"], '', $page->contents);
+                            $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+                            $clean_content = html_entity_decode($clean_content);
+                            $clean_content = str_replace(['\"', "\'"], ['"', "'"], $clean_content);
+
+                            $pages_data[] = [
+                                'pageid' => (int)$page->id,
+                                'title' => $page->title,
+                                'content' => trim($clean_content),
+                                'prevpageid' => (int)$page->prevpageid ?? null,
+                                'nextpageid' => (int)$page->nextpageid ?? null,
+                            ];
+                        }
+
+                        $timers = $DB->get_records('lesson_timer', ['lessonid' =>$cm->instance]);
+                    foreach ($pages as $page) {
+                        $clean_content = str_replace(["\r", "\n"], '', $page->contents);
+                        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+
+                        $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        $clean_content = str_replace(['\"', "\'"], ['"', "'"], $clean_content);
+
+                        $clean_content = preg_replace('/style="[^"]*"/i', '', $clean_content);
+                        $clean_content = preg_replace('/data-[^=]+="[^"]*"/i', '', $clean_content);
+                        $clean_content = preg_replace('/\*].*?\[.*?\]/', '', $clean_content);
+                        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+
+                        $pages_data[] = [
+                            'pageid' => (int)$page->id,
+                            'title' => $page->title,
+                            'content' => trim($clean_content),
+                            'prevpageid' => (int)$page->prevpageid ?? null,
+                            'nextpageid' => (int)$page->nextpageid ?? null,
+                        ];
+                    }
+
                         if (!empty($lessoninfo['grades']) && !$canviewallgrades) {
                             $lessoninfo['grades'] = array_values(array_filter($lessoninfo['grades'], function($g) use ($effectiveUser) {
                                 return (int)($g['userid'] ?? 0) === (int)$effectiveUser->id;
@@ -336,8 +398,9 @@ class GetActivitiesByCourse extends external_api {
                 'timelimit' => $timelimit,
                 'retake' => $retake,
                 'maxattempts' => $maxattempts,
-                'usepassword' => $usepassword,
                 'modattempts' => $modattempts,
+                'pages' => $pages_data,
+                'time' => $time_data,
                 'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
                 'files' => $files_data,
                 'tags' => $tags_data,
