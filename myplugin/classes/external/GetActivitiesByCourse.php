@@ -86,9 +86,7 @@ class GetActivitiesByCourse extends external_api {
                 ),
                 'available'   => new external_value(PARAM_RAW, 'Available date', VALUE_OPTIONAL),
                 'timelimit'   => new external_value(PARAM_RAW, 'Time limit (HH:MM:SS)', VALUE_OPTIONAL),
-                'retake'      => new external_value(PARAM_BOOL, 'Whether the lesson can be retaken', VALUE_OPTIONAL),
                 'maxattempts' => new external_value(PARAM_INT, 'Maximum attempts', VALUE_OPTIONAL),
-                'modattempts' => new external_value(PARAM_BOOL, 'Whether multiple attempts per question are allowed', VALUE_OPTIONAL),
                 'pages' => new external_multiple_structure(
                     new external_single_structure([
                         'pageid' => new external_value(PARAM_INT, 'Page id'),
@@ -96,6 +94,13 @@ class GetActivitiesByCourse extends external_api {
                         'content' => new external_value(PARAM_RAW, 'Page content'),
                         'prevpageid' => new external_value(PARAM_INT, 'Previous page id', VALUE_OPTIONAL),
                         'nextpageid' => new external_value(PARAM_INT, 'Next page id', VALUE_OPTIONAL),
+                        'answers' => new external_multiple_structure(
+                            new external_single_structure([
+                                'answerid' => new external_value(PARAM_INT, 'Answer id', VALUE_OPTIONAL),
+                                'answer' => new external_value(PARAM_RAW, 'Answer text', VALUE_OPTIONAL),
+                                'response' => new external_value (PARAM_RAW, 'Response text', VALUE_OPTIONAL),
+                            ])
+                        )
                     ]),
                     'Pages from lesson activity',
                     VALUE_OPTIONAL
@@ -190,9 +195,7 @@ class GetActivitiesByCourse extends external_api {
 
             $available = null;
             $timelimit = null;
-            $retake = null;
             $maxattempts = null;
-            $modattempts = null;
             $pages_data = [];
             $time_data = [];
             $grades_data = [];
@@ -232,13 +235,10 @@ class GetActivitiesByCourse extends external_api {
                         require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
                         $lessoninfo = \local_myplugin\external\GetModLesson::execute($cm->instance, $params['courseid'], $effectiveUser->id);
 
-                        $maxgrade = $lessoninfo['maxgrade'] ?? $maxgrade;
                         $duedate = $lessoninfo['duedate'] ?? $duedate;
                         $available = $lessoninfo['available'] ?? null;
                         $timelimit = $lessoninfo['timelimit'] ?? null;
-                        $retake = $lessoninfo['retake'] ?? null;
                         $maxattempts = $lessoninfo['maxattempts'] ?? null;
-                        $modattempts = $lessoninfo['modattempts'] ?? null;
 
                         $pages = $DB->get_records('lesson_pages', ['lessonid' => $cm->instance]);
                         $pages_data = [];
@@ -255,10 +255,22 @@ class GetActivitiesByCourse extends external_api {
                             $clean_content = preg_replace('/\*].*?\[.*?\]/', '', $clean_content);
                             $clean_content = preg_replace('/\s+/', ' ', $clean_content);
 
+                            $answers = $DB->get_records('lesson_answers', ['pageid' => $page->id]);
+                            $answers_data = [];
+
+                            foreach ($answers as $answer) {
+                                $answers_data[] = [
+                                    'answerid' => (int)$answer->id,
+                                    'answer' => $answer->answer,
+                                    'response' => $answer->response,
+                                ];
+                            }
+
                             $pages_data[] = [
                                 'pageid' => (int)$page->id,
                                 'title' => $page->title,
                                 'content' => trim($clean_content),
+                                'answers' => $answers_data,
                                 'prevpageid' => (int)$page->prevpageid ?? null,
                                 'nextpageid' => (int)$page->nextpageid ?? null,
                             ];
@@ -389,9 +401,7 @@ class GetActivitiesByCourse extends external_api {
                 'duedate' => $duedate,
                 'available' => $available,
                 'timelimit' => $timelimit,
-                'retake' => $retake,
                 'maxattempts' => $maxattempts,
-                'modattempts' => $modattempts,
                 'pages' => $pages_data,
                 'time' => $time_data,
                 'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,

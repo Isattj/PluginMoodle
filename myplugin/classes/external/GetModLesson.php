@@ -25,14 +25,23 @@ class GetModLesson extends external_api {
 
     public static function execute_returns() {
         return new external_single_structure([
-            'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade', VALUE_OPTIONAL),
             'duedate' => new external_value(PARAM_RAW, 'Deadline date', VALUE_OPTIONAL),
             'available' => new external_value(PARAM_RAW, 'Available date', VALUE_OPTIONAL),
             'timelimit' => new external_value(PARAM_RAW, 'Time limit', VALUE_OPTIONAL),
-            'retake' => new external_value(PARAM_BOOL, 'Whether the lesson can be retaken', VALUE_OPTIONAL),
             'maxattempts' => new external_value(PARAM_INT, 'Maximum attempts', VALUE_OPTIONAL),
-            'usepassword' => new external_value(PARAM_BOOL, 'Whether the lesson requires a password', VALUE_OPTIONAL),
-            'modattempts' => new external_value(PARAM_BOOL, 'Whether multiple attempts per question are allowed', VALUE_OPTIONAL),
+            'pages' => new external_multiple_structure(
+                new external_single_structure([
+                    'pageid' => new external_value(PARAM_INT, 'Page id'),
+                    'title' => new external_value(PARAM_RAW, 'Page title'),
+                    'content' => new external_value(PARAM_RAW, 'Page content'),
+                ])
+            ),
+            'time' => new external_multiple_structure(
+                new external_single_structure([
+                    'starttime' => new external_value(PARAM_RAW, 'Parameter start time'),
+                    'endtime' => new external_value(PARAM_RAW, 'Parameter end time'),
+                ])
+            ),
             'grades' => new external_multiple_structure(
                 new external_single_structure([
                     'userid' => new external_value(PARAM_INT, 'User ID'),
@@ -65,6 +74,26 @@ class GetModLesson extends external_api {
         $isstudent = !has_capability('mod/lesson:manage', $context);
         $grades = grade_get_grades($params['courseid'], 'mod', 'lesson', $params['lessonid']);
 
+        $pages_records = $DB->get_records('lesson_pages', ['lessonid' => $params['lessonid']], 'id ASC', 'id, title, contents');
+        $pages_data = [];
+        foreach ($pages_records as $page) {
+            $pages_data[] = [
+                'pageid' => (int)$page->id,
+                'title' => $page->title ?? '',
+                'content' => format_text($page->contents, FORMAT_HTML),
+            ];
+        }
+
+        $timer_records = $DB->get_records('lesson_timer', ['lessonid' => $params['lessonid'], 'userid' => $params['userid']], 'starttime DESC');
+        $time_data = [];
+
+        foreach ($timer_records as $t) {
+            $time_data[] = [
+                'starttime' => date('d/m/Y H:i:s', $t->starttime),
+                'endtime' => date('d/m/Y H:i:s', $t->lessontime),
+            ];
+        }
+
         $grades_data = [];
         if (!empty($grades->items)) {
             $item = reset($grades->items);
@@ -82,15 +111,12 @@ class GetModLesson extends external_api {
         }
 
         return [
-            'maxgrade' => $lesson->grade ?? null,
-            'duedate' => !empty($lesson->deadline) ? date('d/m/Y H:i:s', $lesson->deadline) : null,
             'available' => !empty($lesson->available) ? date('d/m/Y H:i:s', $lesson->available) : null,
             'timelimit' => !empty($lesson->timelimit) ? gmdate('H:i:s', $lesson->timelimit) : null,
-            'retake' => !empty($lesson->retake),
             'maxattempts' => $lesson->maxattempts ?? null,
-            'usepassword' => !empty($lesson->usepassword),
-            'modattempts' => !empty($lesson->modattempts),
-            'grades' => $grades_data
+            'pages' => $pages_data,
+            'time' => $time_data,
         ];
     }
+
 }
