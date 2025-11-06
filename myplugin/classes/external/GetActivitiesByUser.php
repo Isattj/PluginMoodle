@@ -94,6 +94,26 @@ class GetActivitiesByUser extends external_api {
                 'retake' => new external_value(PARAM_BOOL, 'Whether the lesson can be retaken', VALUE_OPTIONAL),
                 'maxattempts' => new external_value(PARAM_INT, 'Maximum attempts', VALUE_OPTIONAL),
                 'modattempts' => new external_value(PARAM_BOOL, 'Whether multiple attempts per question are allowed', VALUE_OPTIONAL),
+                'pages' => new external_multiple_structure(
+                    new external_single_structure([
+                        'pageid' => new external_value(PARAM_INT, 'Page id'),
+                        'title' => new external_value(PARAM_RAW, 'Page title'),
+                        'content' => new external_value(PARAM_RAW, 'Page content'),
+                        'prevpageid' => new external_value(PARAM_INT, 'Previous page id', VALUE_OPTIONAL),
+                        'nextpageid' => new external_value(PARAM_INT, 'Next page id', VALUE_OPTIONAL),
+                    ]),
+                    'Pages from lesson activity',
+                    VALUE_OPTIONAL
+                ),       
+                'time' => new external_multiple_structure(
+                    new external_single_structure([
+                        'userid' => new external_value(PARAM_INT, 'User ID'),
+                        'starttime' => new external_value(PARAM_RAW, 'Parameter start time'),
+                        'endtime' => new external_value(PARAM_RAW, 'Parameter end time'),
+                    ]),
+                    'Time parameters from lesson activity',
+                    VALUE_OPTIONAL
+                ),
             ])
         );
     }
@@ -215,8 +235,41 @@ class GetActivitiesByUser extends external_api {
                             $maxattempts = $lessoninfo['maxattempts'] ?? null;
                             $modattempts = $lessoninfo['modattempts'] ?? null;
 
-                            $grades_data = $lessoninfo['grades'] ?? [];
+                            $pages = $DB->get_records('lesson_pages', ['lessonid' => $cm->instance]);
+                            $pages_data = [];
 
+                            foreach ($pages as $page) {
+                                $clean_content = str_replace(["\r", "\n"], '', $page->contents);
+                                $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+
+                                $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                                $clean_content = str_replace(['\"', "\'"], ['"', "'"], $clean_content);
+
+                                $clean_content = preg_replace('/style="[^"]*"/i', '', $clean_content);
+                                $clean_content = preg_replace('/data-[^=]+="[^"]*"/i', '', $clean_content);
+                                $clean_content = preg_replace('/\*].*?\[.*?\]/', '', $clean_content);
+                                $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+
+                                $pages_data[] = [
+                                    'pageid' => (int)$page->id,
+                                    'title' => $page->title,
+                                    'content' => trim($clean_content),
+                                    'prevpageid' => (int)$page->prevpageid ?? null,
+                                    'nextpageid' => (int)$page->nextpageid ?? null,
+                                ];
+                            }
+
+                            $timers = $DB->get_records('lesson_timer', ['lessonid' =>$cm->instance]);
+                            $time_data = [];
+                            foreach ($timers as $timer){
+                                $time_data[] = [
+                                    'userid' => (int) $timer->userid,
+                                    'starttime' => date('d/m/Y H:i:s', $timer->starttime),
+                                    'endtime' => date('d/m/Y H:i:s', $timer->endtime)
+                                ];
+                            }
+
+                            $grades_data = $lessoninfo['grades'] ?? [];
                             if (!$teacher && !empty($grades_data)) {
                                 $grades_data = array_values(array_filter($grades_data, function($g) use ($params) {
                                     return (int)($g['userid'] ?? 0) === (int)$params['userid'];
@@ -269,7 +322,7 @@ class GetActivitiesByUser extends external_api {
                     }
                 }
 
-                $result[] = [
+                $activity = [
                     'courseid' => $course->id,
                     'coursename' => $course->fullname,
                     'activityid' => $cm->id,
@@ -277,20 +330,24 @@ class GetActivitiesByUser extends external_api {
                     'moduletype' => $cm->modname,
                     'maxgrade' => $maxgrade,
                     'duedate' => $duedate,
-                    'available' => $available,
-                    'timelimit' => $timelimit,
-                    'retake' => $retake,
-                    'maxattempts' => $maxattempts,
-                    'modattempts' => $modattempts,
-                    'pages' => $pages_data,
-                    'time' => $time_data,
-                    'grades' => $grades_data,
                     'link' => $CFG->wwwroot . '/mod/' . $cm->modname . '/view.php?id=' . $cm->id,
                     'files' => $files_data,
                     'tags' => $tags_data,
                     'competencies' => $competencies_data,
                     'grades' => $grades_data,
                 ];
+
+                if ($cm->modname === 'lesson') {
+                    $activity['available'] = $available;
+                    $activity['timelimit'] = $timelimit;
+                    $activity['retake'] = $retake;
+                    $activity['maxattempts'] = $maxattempts;
+                    $activity['modattempts'] = $modattempts;
+                    $activity['pages'] = $pages_data;
+                    $activity['time'] = $time_data;
+                }
+
+                $result[]= $activity;
             }
         }
 

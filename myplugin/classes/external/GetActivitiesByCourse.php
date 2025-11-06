@@ -243,11 +243,17 @@ class GetActivitiesByCourse extends external_api {
                         $pages = $DB->get_records('lesson_pages', ['lessonid' => $cm->instance]);
                         $pages_data = [];
 
-                        foreach($pages as $page){
+                        foreach ($pages as $page) {
                             $clean_content = str_replace(["\r", "\n"], '', $page->contents);
                             $clean_content = preg_replace('/\s+/', ' ', $clean_content);
-                            $clean_content = html_entity_decode($clean_content);
+
+                            $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
                             $clean_content = str_replace(['\"', "\'"], ['"', "'"], $clean_content);
+
+                            $clean_content = preg_replace('/style="[^"]*"/i', '', $clean_content);
+                            $clean_content = preg_replace('/data-[^=]+="[^"]*"/i', '', $clean_content);
+                            $clean_content = preg_replace('/\*].*?\[.*?\]/', '', $clean_content);
+                            $clean_content = preg_replace('/\s+/', ' ', $clean_content);
 
                             $pages_data[] = [
                                 'pageid' => (int)$page->id,
@@ -259,26 +265,13 @@ class GetActivitiesByCourse extends external_api {
                         }
 
                         $timers = $DB->get_records('lesson_timer', ['lessonid' =>$cm->instance]);
-                    foreach ($pages as $page) {
-                        $clean_content = str_replace(["\r", "\n"], '', $page->contents);
-                        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
-
-                        $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                        $clean_content = str_replace(['\"', "\'"], ['"', "'"], $clean_content);
-
-                        $clean_content = preg_replace('/style="[^"]*"/i', '', $clean_content);
-                        $clean_content = preg_replace('/data-[^=]+="[^"]*"/i', '', $clean_content);
-                        $clean_content = preg_replace('/\*].*?\[.*?\]/', '', $clean_content);
-                        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
-
-                        $pages_data[] = [
-                            'pageid' => (int)$page->id,
-                            'title' => $page->title,
-                            'content' => trim($clean_content),
-                            'prevpageid' => (int)$page->prevpageid ?? null,
-                            'nextpageid' => (int)$page->nextpageid ?? null,
-                        ];
-                    }
+                        foreach ($timers as $timer){
+                            $time_data[] = [
+                                'userid' => (int) $timer->userid,
+                                'starttime' => date('d/m/Y H:i:s', $timer->starttime),
+                                'endtime' => date('d/m/Y H:i:s', $timer->endtime)
+                            ];
+                        }
 
                         if (!empty($lessoninfo['grades']) && !$canviewallgrades) {
                             $lessoninfo['grades'] = array_values(array_filter($lessoninfo['grades'], function($g) use ($effectiveUser) {
