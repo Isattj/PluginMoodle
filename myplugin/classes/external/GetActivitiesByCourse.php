@@ -92,7 +92,15 @@ class GetActivitiesByCourse extends external_api {
                     new external_single_structure([
                         'pageid' => new external_value(PARAM_INT, 'Page id'),
                         'title' => new external_value(PARAM_RAW, 'Page title'),
-                        'content' => new external_value(PARAM_RAW, 'Page content'),
+                        'paragraphs' => new external_multiple_structure(
+                            new external_value(PARAM_RAW, 'Paragraph text')
+                        ),
+                        'images' => new external_multiple_structure(
+                            new external_singe_structure([
+                                'src' => new external_value(PARAM_RAW, 'Image URL'),
+                                'alt' => new external_value(PARAM_RAW, 'Image alt text', VALUE_OPTIONAL)
+                            ])
+                        ),
                         'prevpageid' => new external_value(PARAM_INT, 'Previous page id', VALUE_OPTIONAL),
                         'nextpageid' => new external_value(PARAM_INT, 'Next page id', VALUE_OPTIONAL),
                         'answers' => new external_multiple_structure(
@@ -237,12 +245,19 @@ class GetActivitiesByCourse extends external_api {
                     $fileareas = ['intro'];
                     if (file_exists($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php')) {
                         require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
-                        $lessoninfo = \local_myplugin\external\GetModLesson::execute($cm->instance, $params['courseid'], $effectiveUser->id);
+                        static $lesson_cache = [];
+                        if(!isset($lesson_cache[$cm->instance])){
+                            $lesson_cache = [$cm->instance] = \local_myplugin\external\GetModLesson::execute($cm->instance, $params['courseid'], $effectiveUser->id);
+                        }
+                        $lessoninfo = $lesson_cache[$cm->instance];
 
-                        $duedate = $lessoninfo['duedate'] ?? $duedate;
+                        $duedate = $lessoninfo['duedate'] ?? null;
                         $available = $lessoninfo['available'] ?? null;
                         $timelimit = $lessoninfo['timelimit'] ?? null;
                         $maxattempts = $lessoninfo['maxattempts'] ?? null;
+                        $pages_data = $lessoninfo['pages'] ?? [null];
+                        $time_data = $lessoninfo['time'] ?? [];
+                        $grades_data = $lessoninfo['grades'] ?? [];
 
                         $pages = $DB->get_records('lesson_pages', ['lessonid' => $cm->instance]);
                         $pages_data = [];
@@ -273,7 +288,6 @@ class GetActivitiesByCourse extends external_api {
                             $pages_data[] = [
                                 'pageid' => (int)$page->id,
                                 'title' => $page->title,
-                                'content' => trim($clean_content),
                                 'answers' => $answers_data,
                                 'prevpageid' => (int)$page->prevpageid ?? null,
                                 'nextpageid' => (int)$page->nextpageid ?? null,
@@ -304,7 +318,9 @@ class GetActivitiesByCourse extends external_api {
 
             $files_data = [];
             foreach ($fileareas as $filearea) {
-                $files = $fs->get_area_files($modcontext->id, $component, $filearea, false, 'filename', false);
+                $itemid = 0;
+                $files = $fs->get_area_files($modcontext->id, $component, $filearea, $itemid, 'filename', false);
+
                 foreach ($files as $file) {
                     if ($file->is_directory()) {
                         continue;
@@ -413,7 +429,7 @@ class GetActivitiesByCourse extends external_api {
                 'files' => $files_data,
                 'tags' => $tags_data,
                 'competencies' => $competencies_data,
-                'grades' => $grades_data
+                'grades' => $grades_data,
             ];
         }
 
