@@ -45,6 +45,7 @@ class GetActivitiesByCourse extends external_api {
                 'coursename' => new external_value(PARAM_RAW, 'Course name'),
                 'activityid' => new external_value(PARAM_INT, 'Activity ID'),
                 'activityname' => new external_value(PARAM_RAW, 'Activity name'),
+                'intro' => new external_value(PARAM_RAW, 'Description of the activity', VALUE_OPTIONAL),
                 'moduletype' => new external_value(PARAM_RAW, 'Module type'),
                 'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade', VALUE_OPTIONAL),
                 'duedate' => new external_value(PARAM_RAW, 'Due date (if applicable)', VALUE_OPTIONAL),
@@ -189,6 +190,7 @@ class GetActivitiesByCourse extends external_api {
             $instance = $DB->get_record($cm->modname, ['id' => $cm->instance]);
             $duedate = ($instance && property_exists($instance, 'duedate')) ? date('d/m/Y H:i:s', $instance->duedate) : null;
             $maxgrade = ($instance && property_exists($instance, 'grade')) ? round((float)$instance->grade, 2) : null;
+            $intro = ($instance && property_exists($instance, 'intro')) ? $instance->intro : null;
 
             $fs = get_file_storage();
             $modcontext = context_module::instance($cm->id);
@@ -207,6 +209,8 @@ class GetActivitiesByCourse extends external_api {
                 case 'assign':
                     $component = 'mod_assign';
                     $fileareas = ['intro', 'introattachment'];
+                    $assign = $DB->get_record('assign', ['id' => $cm->instance], 'intro', IGNORE_MISSING);
+                    $intro = $assign ? $assign->intro : null;
                     break;
                 case 'resource':
                     $component = 'mod_resource';
@@ -396,6 +400,7 @@ class GetActivitiesByCourse extends external_api {
                 'coursename' => $coursename,
                 'activityid' => $cm->id,
                 'activityname' => $cm->get_formatted_name(),
+                'intro' => $intro,
                 'moduletype' => $cm->modname,
                 'maxgrade' => $maxgrade,
                 'duedate' => $duedate,

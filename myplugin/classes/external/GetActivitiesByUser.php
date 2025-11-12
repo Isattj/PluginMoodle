@@ -45,6 +45,7 @@ class GetActivitiesByUser extends external_api {
                 'coursename' => new external_value(PARAM_RAW, 'Course name'),
                 'activityid' => new external_value(PARAM_INT, 'Activity ID'),
                 'activityname' => new external_value(PARAM_RAW, 'Activity name'),
+                'intro' => new external_value (PARAM_RAW, 'Description of the activity', VALUE_OPTIONAL),
                 'moduletype' => new external_value(PARAM_RAW, 'Module type'),
                 'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade', VALUE_OPTIONAL),
                 'duedate' => new external_value(PARAM_RAW, 'Due date (if applicable)', VALUE_OPTIONAL),
@@ -197,6 +198,11 @@ class GetActivitiesByUser extends external_api {
                 $grades_data = [];
                 $maxgrade = null;
                 $duedate = null;
+                $intro = null;
+                $pages_data = [];
+                $time_data = [];
+                $available = $timelimit = $maxattempts = null;
+                $intro = $DB->get_field($cm->modname, 'intro', ['id' => $cm->instance]) ?? null;
 
                 if ($cm->modname === 'assign') {
                     $grades = $DB->get_records_sql("
@@ -215,16 +221,17 @@ class GetActivitiesByUser extends external_api {
                         ];
                     }
 
-                    $assign = $DB->get_record('assign', ['id' => $cm->instance]);
+                    $assign = $DB->get_record('assign', ['id' => $cm->instance], '*', IGNORE_MISSING);
                     $maxgrade = $assign->grade ?? null;
                     $duedate = !empty($assign->duedate) ? date('d/m/Y H:i:s', $assign->duedate) : null;
+
 
                 } elseif ($cm->modname === 'lesson') {
                     $available = $timelimit = $maxattempts = null;
 
                     if (file_exists($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php')) {
                         require_once($CFG->dirroot . '/local/myplugin/classes/external/GetModLesson.php');
-
+                        
                         try {
                             $lessoninfo = \local_myplugin\external\GetModLesson::execute(
                                 $cm->instance,
@@ -342,6 +349,7 @@ class GetActivitiesByUser extends external_api {
                     'coursename' => $course->fullname,
                     'activityid' => $cm->id,
                     'activityname' => $cm->get_formatted_name(),
+                    'intro' => $intro,
                     'moduletype' => $cm->modname,
                     'maxgrade' => $maxgrade,
                     'duedate' => $duedate,
