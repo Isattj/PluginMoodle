@@ -33,15 +33,7 @@ class GetModLesson extends external_api {
                 new external_single_structure([
                     'pageid' => new external_value(PARAM_INT, 'Page id'),
                     'title' => new external_value(PARAM_RAW, 'Page title'),
-                    'paragraphs' => new external_multiple_structure(
-                        new external_value(PARAM_RAW, 'Page text')
-                    ),
-                    'images' => new external_multiple_structure(
-                        new external_structue([
-                            'src' => new external_value(PARAM_RAW,' Image URL'),
-                            'alt' => new external_value(PARAM_RAW,' Image alt text', VALUE_OPTIONAL),
-                        ])
-                    ),
+                    'content' => new external_value(PARAM_RAW, 'Page content'),
                 ])
             ),
             'time' => new external_multiple_structure(
@@ -61,7 +53,7 @@ class GetModLesson extends external_api {
     }
 
     public static function execute($lessonid, $courseid, $userid) {
-        global $DB, $CFG;
+        global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'lessonid' => $lessonid,
@@ -85,39 +77,10 @@ class GetModLesson extends external_api {
         $pages_records = $DB->get_records('lesson_pages', ['lessonid' => $params['lessonid']], 'id ASC', 'id, title, contents');
         $pages_data = [];
         foreach ($pages_records as $page) {
-            $content = format_text($page->contents, FORMAT_HTML);
-
-            preg_match_all('/<img[^>]+src="([^">]+)"[^>]*alt="([^">]*)"[^>]*>/i', $content, $matches, PREG_SET_ORDER);
-            $images_info = [];
-            foreach($matches as $match){
-                $src = $match[1];
-                $alt = $match[2];
-
-                if(strpos($src, '@@PLUGINFILE@@') !== false){
-                    $context = context_module::instance($cm->id);
-                    $component = 'mod_lesson';
-                    $filearea = 'page_contents';
-                    $itemid = $page->id;
-
-                    $src = str_replace(
-                        '@@PLUGINFILE@@',
-                        $CFG->wwwroot . "/pluginfile.php/{$context->id}/{$component}/{$filearea}/{$itemid}",
-                        $src
-                    );
-                }
-                $images_info[] = [
-                    'alt' => $alt,
-                    'src' => $src
-                ];
-            }
-
-            preg_match_all('/<p>(.*?)<\/p>/is', $content, $paragraphs);
-            $paragraph_texts = array_map(fn($p) => trim(strip_tags($p)), $paragraphs[1]);
             $pages_data[] = [
                 'pageid' => (int)$page->id,
                 'title' => $page->title ?? '',
-                'paragraphs' => $paragraph_texts,
-                'images' => $images_info
+                'content' => format_text($page->contents, FORMAT_HTML),
             ];
         }
 
@@ -148,13 +111,11 @@ class GetModLesson extends external_api {
         }
 
         return [
-            'duedate' => !empty($lesson->deadline) ? date('d/m/Y H:i:s', $lesson->deadline) : null,
             'available' => !empty($lesson->available) ? date('d/m/Y H:i:s', $lesson->available) : null,
             'timelimit' => !empty($lesson->timelimit) ? gmdate('H:i:s', $lesson->timelimit) : null,
             'maxattempts' => $lesson->maxattempts ?? null,
             'pages' => $pages_data,
             'time' => $time_data,
-            'grades' => $grades_data
         ];
     }
 

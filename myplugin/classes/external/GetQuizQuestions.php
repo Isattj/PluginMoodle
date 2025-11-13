@@ -15,6 +15,20 @@ use core_external\external_value;
 
 class GetQuizQuestions extends external_api {
 
+    private static function remove_null_informations(array $data) {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::remove_null_informations($value);
+                if ($data[$key] === []) {
+                    unset($data[$key]);
+                }
+            } else if (is_null($value)) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     public static function execute_parameters() {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'The course ID'),
@@ -28,10 +42,10 @@ class GetQuizQuestions extends external_api {
                 'quizname' => new external_value(PARAM_RAW, 'Quiz name'),
                 'quiztags' => new external_multiple_structure(
                     new external_single_structure([
-                        'tagid' => new external_value(PARAM_INT, 'tag ID'),
-                        'tagname' => new external_value(PARAM_RAW, 'tag name'),
+                        'tagid' => new external_value(PARAM_INT, 'Tag ID'),
+                        'tagname' => new external_value(PARAM_RAW, 'Tag name'),
                     ]),
-                    "Tags associadas ao quiz",
+                    'Quiz tags',
                     VALUE_OPTIONAL
                 ),
                 'quizcompetencies' => new external_multiple_structure(
@@ -40,7 +54,7 @@ class GetQuizQuestions extends external_api {
                         'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
                         'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
                     ]),
-                    "Competências relacionadas ao quiz",
+                    'Quiz competencies',
                     VALUE_OPTIONAL
                 ),
                 'questions' => new external_multiple_structure(
@@ -52,8 +66,13 @@ class GetQuizQuestions extends external_api {
                         'answers' => new external_multiple_structure(
                             new external_single_structure([
                                 'answerid' => new external_value(PARAM_INT, 'Answer ID'),
-                                'answer' => new external_value(PARAM_RAW, 'Answer text'),
-                                'fraction' => new external_value(PARAM_FLOAT, 'Fraction (1=correct, 0=incorrect)'),
+                                'options' => new external_multiple_structure(
+                                    new external_single_structure([
+                                        'answerOption' => new external_value(PARAM_RAW, 'Only one answer'),
+                                        'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL)
+                                    ]),
+                                ),
+                                'fraction' => new external_value(PARAM_FLOAT, 'Fraction (1=correct, 0=incorrect)', VALUE_OPTIONAL),
                             ]),
                             'Possible answers',
                             VALUE_OPTIONAL
@@ -65,11 +84,9 @@ class GetQuizQuestions extends external_api {
     }
 
     public static function execute($courseid) {
-        global $DB;
+        global $DB, $USER;
 
-        $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid,
-        ]);
+        $params = self::validate_parameters(self::execute_parameters(), ['courseid' => $courseid]);
 
         $context = context_course::instance($params['courseid']);
         self::validate_context($context);
@@ -77,10 +94,7 @@ class GetQuizQuestions extends external_api {
 
         $sql = "
             WITH quiz_tags AS (
-                SELECT 
-                    t.id AS tagid,
-                    t.name AS tagname,
-                    ti.itemid AS cmid
+                SELECT t.id AS tagid, t.name AS tagname, ti.itemid AS cmid
                 FROM {tag_instance} ti
                 JOIN {tag} t ON t.id = ti.tagid
                 WHERE ti.itemtype = 'course_modules'
@@ -116,17 +130,14 @@ class GetQuizQuestions extends external_api {
         ";
 
         $records = $DB->get_recordset_sql($sql, ['courseid' => $params['courseid']]);
-
         $quizzes_map = [];
 
         foreach ($records as $row) {
-            if (empty($row->quizid)) {
-                continue;
-            }
+            if (empty($row->quizid)) continue;
 
             $quizid = (int)$row->quizid;
             $questionid = (int)$row->questionid;
-            $answerid = (int)$row->answerid;
+            $answerid = isset($row->answerid) ? (int)$row->answerid : null;
 
             if (!isset($quizzes_map[$quizid])) {
                 $quizzes_map[$quizid] = [
@@ -164,17 +175,42 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-            if (!is_null($answerid) &&
-                !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
 
-                $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = [
+            if($row->questiontype === 'match'){
+                $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
+                foreach($subquestions as $sub){
+                    $answerdata = [
+                        'answerid' => (int)$sub->id,
+                        'options' => [
+                            [
+                                'answerOption' => $sub->answertext ?? '',
+                                'answertext' => $sub->answertext ?? '',
+                            ]
+                        ],
+                        'fraction' => 1.0
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                }
+                    
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+            } else if (!is_null($answerid) &&
+            !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+                $answerdata = [
                     'answerid' => $answerid,
-                    'answer' => $row->answer ?? '',
-                    'fraction' => (float)$row->fraction,
+                    'options' => [
+                        [
+                            'answerOption' => $row->answer ?? '',
+                            'answertext' => ''
+                        ]
+                        ],
+                        'fraction' => (float) $row->fraction
                 ];
-                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
+
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerdata;
             }
         }
+
         $records->close();
 
         $result = [];
@@ -188,6 +224,7 @@ class GetQuizQuestions extends external_api {
             $quiz['questions'] = array_values($quiz['questions']);
             $result[] = $quiz;
         }
+
         return $result;
     }
 }
