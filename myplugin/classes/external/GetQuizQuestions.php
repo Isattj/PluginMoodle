@@ -69,15 +69,36 @@ class GetQuizQuestions extends external_api {
                                 'options' => new external_multiple_structure(
                                     new external_single_structure([
                                         'answerOption' => new external_value(PARAM_RAW, 'Only one answer'),
+                                        'counted' => new external_multiple_structure(
+                                            new external_single_structure([
+                                                'variableid' => new external_value(PARAM_INT, 'Variable id'),
+                                                'itemcount' => new external_value(PARAM_INT, 'quantity of items'),
+                                                'variableName' => new external_value(PARAM_RAW, 'Variable name'),
+                                                'items' => new external_multiple_structure(
+                                                    new external_single_structure([
+                                                        'itemid' => new external_value(PARAM_INT, 'Item id'),
+                                                        'value' => new external_value(PARAM_FLOAT, 'Value item')
+                                                    ]),
+                                                    'Items',
+                                                    VALUE_OPTIONAL
+                                                ),
+                                            ]),
+                                            'Counted variables',
+                                            VALUE_OPTIONAL
+                                        ),
                                         'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL)
                                     ]),
+                                    'Options',
+                                    VALUE_OPTIONAL
                                 ),
                                 'fraction' => new external_value(PARAM_FLOAT, 'Fraction (1=correct, 0=incorrect)', VALUE_OPTIONAL),
                             ]),
                             'Possible answers',
                             VALUE_OPTIONAL
                         ),
-                    ])
+                    ]),
+                    'Questions',
+                    VALUE_OPTIONAL
                 ),
             ])
         );
@@ -133,7 +154,9 @@ class GetQuizQuestions extends external_api {
         $quizzes_map = [];
 
         foreach ($records as $row) {
-            if (empty($row->quizid)) continue;
+            if (empty($row->quizid)) {
+                continue;
+            }
 
             $quizid = (int)$row->quizid;
             $questionid = (int)$row->questionid;
@@ -175,15 +198,14 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-
-            if($row->questiontype === 'match'){
+            if ($row->questiontype === 'match') {
                 $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
-                foreach($subquestions as $sub){
+                foreach ($subquestions as $sub) {
                     $answerdata = [
                         'answerid' => (int)$sub->id,
                         'options' => [
                             [
-                                'answerOption' => $sub->answertext ?? '',
+                                'answerOption' => $sub->questiontext ?? '',
                                 'answertext' => $sub->answertext ?? '',
                             ]
                         ],
@@ -191,10 +213,49 @@ class GetQuizQuestions extends external_api {
                     ];
                     $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
                 }
-                    
-                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
-            } else if (!is_null($answerid) &&
-            !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+            } else if ($row->questiontype === 'counted') {
+                $variablesList = [];
+
+                $datasets = $DB->get_records('question_datasets', ['question' => $questionid]);
+
+                foreach ($datasets as $dataset) {
+                    $definition = $DB->get_record('question_dataset_definitions', ['id' => $dataset->datasetdefinition]);
+                    if (!$definition) {
+                        continue;
+                    }
+
+                    $items = $DB->get_records('question_dataset_items', ['definition' => $definition->id]);
+
+                    $itemsList = [];
+                    foreach ($items as $item) {
+                        $itemsList[] = [
+                            'itemid' => (int)$item->id,
+                            'value' => (float)$item->value
+                        ];
+                    }
+
+                    $variable = [
+                        'variableid' => (int)$definition->id,
+                        'itemcount' => (int)$definition->itemcount,
+                        'variableName' => $definition->name,
+                        'items' => $itemsList,
+                    ];
+
+                    $variablesList[] = $variable;
+                }
+
+                $answerdata = [
+                    'answerid' => $answerid ?? 0,
+                    'options' => [
+                        [
+                            'answerOption' => $row->answer ?? '',
+                            'counted' => $variablesList
+                        ]
+                    ],
+                    'fraction' => (float)($row->fraction ?? 0)
+                ];
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+            } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                 $answerdata = [
                     'answerid' => $answerid,
                     'options' => [
@@ -202,12 +263,12 @@ class GetQuizQuestions extends external_api {
                             'answerOption' => $row->answer ?? '',
                             'answertext' => ''
                         ]
-                        ],
-                        'fraction' => (float) $row->fraction
+                    ],
+                    'fraction' => (float)$row->fraction
                 ];
 
                 $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
-                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerdata;
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
             }
         }
 
