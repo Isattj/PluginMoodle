@@ -33,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
     } elseif (in_array($selected_endpoint, ['get_students_informations', 'get_activities_by_course', 'get_quiz_questions']) && !$course_id) {
         $error = "Este endpoint precisa de um course_id.";
     } else {
-        $moodle_url = 'http://localhost/webservice/rest/server.php';
-        $token      = 'eb0485c36974d3551687b2202b55ff11';
+        $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
+        $token      = '53f6c6e36617a9dd47853f767baea388';
         $function   = $endpoints[$selected_endpoint];
 
         $postfields = [

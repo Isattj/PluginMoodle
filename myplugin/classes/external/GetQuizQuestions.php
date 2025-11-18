@@ -63,29 +63,29 @@ class GetQuizQuestions extends external_api {
                         'questionname' => new external_value(PARAM_RAW, 'Question name'),
                         'qtype' => new external_value(PARAM_RAW, 'Question type'),
                         'questiontext' => new external_value(PARAM_RAW, 'Question text'),
+                        'calculated' => new external_multiple_structure(
+                            new external_single_structure([
+                                'variableid' => new external_value(PARAM_INT, 'Variable id'),
+                                'itemcount' => new external_value(PARAM_INT, 'quantity of items'),
+                                'variableName' => new external_value(PARAM_RAW, 'Variable name'),
+                                'items' => new external_multiple_structure(
+                                    new external_single_structure([
+                                        'itemid' => new external_value(PARAM_INT, 'Item id'),
+                                        'value' => new external_value(PARAM_FLOAT, 'Value item')
+                                    ]),
+                                    'Items',
+                                    VALUE_OPTIONAL
+                                ),
+                            ]),
+                            'Counted variables',
+                            VALUE_OPTIONAL
+                        ),
                         'answers' => new external_multiple_structure(
                             new external_single_structure([
                                 'answerid' => new external_value(PARAM_INT, 'Answer ID'),
                                 'options' => new external_multiple_structure(
                                     new external_single_structure([
                                         'answerOption' => new external_value(PARAM_RAW, 'Only one answer'),
-                                        'counted' => new external_multiple_structure(
-                                            new external_single_structure([
-                                                'variableid' => new external_value(PARAM_INT, 'Variable id'),
-                                                'itemcount' => new external_value(PARAM_INT, 'quantity of items'),
-                                                'variableName' => new external_value(PARAM_RAW, 'Variable name'),
-                                                'items' => new external_multiple_structure(
-                                                    new external_single_structure([
-                                                        'itemid' => new external_value(PARAM_INT, 'Item id'),
-                                                        'value' => new external_value(PARAM_FLOAT, 'Value item')
-                                                    ]),
-                                                    'Items',
-                                                    VALUE_OPTIONAL
-                                                ),
-                                            ]),
-                                            'Counted variables',
-                                            VALUE_OPTIONAL
-                                        ),
                                         'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL)
                                     ]),
                                     'Options',
@@ -187,33 +187,7 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-            if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
-                $quizzes_map[$quizid]['questions'][$questionid] = [
-                    'questionid' => $questionid,
-                    'questionname' => $row->questionname ?? '',
-                    'qtype' => $row->questiontype ?? '',
-                    'questiontext' => $row->questiontext ?? '',
-                    'answers' => [],
-                    '__addedanswers' => []
-                ];
-            }
-
-            if ($row->questiontype === 'match') {
-                $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
-                foreach ($subquestions as $sub) {
-                    $answerdata = [
-                        'answerid' => (int)$sub->id,
-                        'options' => [
-                            [
-                                'answerOption' => $sub->questiontext ?? '',
-                                'answertext' => $sub->answertext ?? '',
-                            ]
-                        ],
-                        'fraction' => 1.0
-                    ];
-                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
-                }
-            } else if ($row->questiontype === 'counted') {
+            if($row->questiontype === 'calculated' || $row->questiontype === 'calculatedmulti'){
                 $variablesList = [];
 
                 $datasets = $DB->get_records('question_datasets', ['question' => $questionid]);
@@ -244,24 +218,50 @@ class GetQuizQuestions extends external_api {
                     $variablesList[] = $variable;
                 }
 
-                $answerdata = [
-                    'answerid' => $answerid ?? 0,
-                    'options' => [
-                        [
-                            'answerOption' => $row->answer ?? '',
-                            'counted' => $variablesList
-                        ]
-                    ],
-                    'fraction' => (float)($row->fraction ?? 0)
+                $quizzes_map[$quizid]['questions'][$questionid] = [
+                    'questionid' => $questionid,
+                    'questionname' => $row->questionname ?? '',
+                    'qtype' => $row->questiontype ?? '',
+                    'questiontext' => $row->questiontext ?? '',
+                    'calculated' => $variablesList,
+                    'answers' => [],
+                    '__addedanswers' => []
                 ];
-                $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+
+            }else if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
+                $quizzes_map[$quizid]['questions'][$questionid] = [
+                    'questionid' => $questionid,
+                    'questionname' => $row->questionname ?? '',
+                    'qtype' => $row->questiontype ?? '',
+                    'questiontext' => $row->questiontext ?? '',
+                    'answers' => [],
+                    '__addedanswers' => []
+                ];
+            }
+
+
+            if ($row->questiontype === 'match') {
+                $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
+                foreach ($subquestions as $sub) {
+                    $answerdata = [
+                        'answerid' => (int)$sub->id,
+                        'options' => [
+                            [
+                                'answerOption' => $sub->questiontext ?? '',
+                                'answertext' => $sub->answertext ?? '',
+                            ]
+                        ],
+                        'fraction' => 1.0
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                }
+
             } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                 $answerdata = [
                     'answerid' => $answerid,
                     'options' => [
                         [
                             'answerOption' => $row->answer ?? '',
-                            'answertext' => ''
                         ]
                     ],
                     'fraction' => (float)$row->fraction
