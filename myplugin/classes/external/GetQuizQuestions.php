@@ -187,7 +187,8 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-            if($row->questiontype === 'calculated' || $row->questiontype === 'calculatedmulti'){
+
+            if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
                 $variablesList = [];
 
                 $datasets = $DB->get_records('question_datasets', ['question' => $questionid]);
@@ -223,17 +224,7 @@ class GetQuizQuestions extends external_api {
                     'questionname' => $row->questionname ?? '',
                     'qtype' => $row->questiontype ?? '',
                     'questiontext' => $row->questiontext ?? '',
-                    'calculated' => $variablesList,
-                    'answers' => [],
-                    '__addedanswers' => []
-                ];
-
-            }else if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
-                $quizzes_map[$quizid]['questions'][$questionid] = [
-                    'questionid' => $questionid,
-                    'questionname' => $row->questionname ?? '',
-                    'qtype' => $row->questiontype ?? '',
-                    'questiontext' => $row->questiontext ?? '',
+                    'calculated' => $variablesList ?? [],
                     'answers' => [],
                     '__addedanswers' => []
                 ];
