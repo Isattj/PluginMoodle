@@ -312,6 +312,25 @@ class GetQuizQuestions extends external_api {
                 }
 
 
+            } else if($row->questiontype === 'ddimageortext'){
+                $answeroptions = $DB->get_records('qtype_ddimageortext_drags', ['questionid' => $questionid]);
+
+                foreach ($answeroptions as $option) {
+                    if(in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])){
+                        continue;
+                    }
+
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = [
+                        'answerid' => (int)$option->id,
+                        'options' => [
+                            [
+                                'answerOption' => $option->label ?? '',
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$option->id;
+                }
+
             } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                 $answerdata = [
                     'answerid' => $answerid,
