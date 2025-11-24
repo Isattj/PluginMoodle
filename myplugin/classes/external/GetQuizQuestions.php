@@ -12,6 +12,8 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use moodle_url;
+use core_files\file_storage;
 
 class GetQuizQuestions extends external_api {
 
@@ -96,6 +98,7 @@ class GetQuizQuestions extends external_api {
                             'Possible answers',
                             VALUE_OPTIONAL
                         ),
+                        'image' => new external_value(PARAM_URL, 'Image URL', VALUE_OPTIONAL),
                     ]),
                     'Questions',
                     VALUE_OPTIONAL
@@ -226,7 +229,8 @@ class GetQuizQuestions extends external_api {
                     'questiontext' => $row->questiontext ?? '',
                     'calculated' => $variablesList ?? [],
                     'answers' => [],
-                    '__addedanswers' => []
+                    '__addedanswers' => [],
+                    'image' => null
                 ];
             }
 
@@ -246,6 +250,67 @@ class GetQuizQuestions extends external_api {
                     ];
                     $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
                 }
+
+            }  else if($row->questiontype === 'ddmarker'){
+                $answeroptions = $DB->get_records('qtype_ddmarker_drags', ['questionid' => $questionid]);
+
+                foreach ($answeroptions as $option) {
+                    if(in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])){
+                        continue;
+                    }
+
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = [
+                        'answerid' => (int)$option->id,
+                        'options' => [
+                            [
+                                'answerOption' => $option->label ?? '',
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$option->id;
+                }
+
+                if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
+
+                    $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+
+                    if (!empty($question->category)) {
+                        $category = $DB->get_record('question_categories', ['id' => $question->category]);
+
+                        if($category){
+                            $context = context::instance_by_id($category->contextid);
+        
+                            $fs = get_file_storage();
+        
+                            $files = $fs->get_area_files(
+                                $context->id,
+                                'question',
+                                'bgimage',
+                                $questionid,
+                                'itemid, filepath, filename',
+                                false
+                            );
+        
+                            foreach($files as $file){
+                                if(!$file->is_directory()){
+        
+                                    $url = moodle_url::make_pluginfile_url(
+                                        $file->get_contextid(),
+                                        $file->get_component(),
+                                        $file->get_filearea(),
+                                        $file->get_itemid(),
+                                        $file->get_filepath(),
+                                        $file->get_filename()
+                                    )->out(false);
+        
+                                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
 
             } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                 $answerdata = [
