@@ -278,22 +278,25 @@ class GetQuizQuestions extends external_api {
                         $category = $DB->get_record('question_categories', ['id' => $question->category]);
 
                         if($category){
-                            $context = context::instance_by_id($category->contextid);
-        
+                            $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+
+                            $category = $DB->get_record('question_categories', ['id' => $question->category], '*', MUST_EXIST);
+
+                            $context = \context::instance_by_id($category->contextid);
+
                             $fs = get_file_storage();
-        
+
                             $files = $fs->get_area_files(
                                 $context->id,
-                                'question',
+                                'qtype_' . $row->questiontype,
                                 'bgimage',
-                                $questionid,
-                                'itemid, filepath, filename',
+                                0,
+                                'filename',
                                 false
                             );
-        
-                            foreach($files as $file){
-                                if(!$file->is_directory()){
-        
+
+                            foreach ($files as $file) {
+                                if (!$file->is_directory()) {
                                     $url = moodle_url::make_pluginfile_url(
                                         $file->get_contextid(),
                                         $file->get_component(),
@@ -302,7 +305,7 @@ class GetQuizQuestions extends external_api {
                                         $file->get_filepath(),
                                         $file->get_filename()
                                     )->out(false);
-        
+
                                     $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
                                     break;
                                 }
@@ -329,6 +332,50 @@ class GetQuizQuestions extends external_api {
                         ],
                     ];
                     $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$option->id;
+                }
+
+                if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
+
+                    $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+
+                    if (!empty($question->category)) {
+                        $category = $DB->get_record('question_categories', ['id' => $question->category]);
+
+                        if($category){
+                            $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+
+                            $category = $DB->get_record('question_categories', ['id' => $question->category], '*', MUST_EXIST);
+
+                            $context = \context::instance_by_id($category->contextid);
+
+                            $fs = get_file_storage();
+
+                            $files = $fs->get_area_files(
+                                $context->id,
+                                'question',
+                                'bgimage',
+                                $questionid,
+                                'filename',
+                                false
+                            );
+
+                            foreach ($files as $file) {
+                                if (!$file->is_directory()) {
+                                    $url = moodle_url::make_pluginfile_url(
+                                        $file->get_contextid(),
+                                        $file->get_component(),
+                                        $file->get_filearea(),
+                                        $file->get_itemid(),
+                                        $file->get_filepath(),
+                                        $file->get_filename()
+                                    )->out(false);
+
+                                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
 
             } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
@@ -360,7 +407,6 @@ class GetQuizQuestions extends external_api {
             $quiz['questions'] = array_values($quiz['questions']);
             $result[] = $quiz;
         }
-
         return $result;
     }
 }
