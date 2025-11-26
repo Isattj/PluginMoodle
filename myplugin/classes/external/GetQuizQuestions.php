@@ -65,6 +65,7 @@ class GetQuizQuestions extends external_api {
                         'questionname' => new external_value(PARAM_RAW, 'Question name'),
                         'qtype' => new external_value(PARAM_RAW, 'Question type'),
                         'questiontext' => new external_value(PARAM_RAW, 'Question text'),
+                        'template' => new external_value(PARAM_RAW, 'Essay response template', VALUE_OPTIONAL),
                         'calculated' => new external_multiple_structure(
                             new external_single_structure([
                                 'variableid' => new external_value(PARAM_INT, 'Variable id'),
@@ -98,7 +99,6 @@ class GetQuizQuestions extends external_api {
                             'Possible answers',
                             VALUE_OPTIONAL
                         ),
-                        'image' => new external_value(PARAM_URL, 'Image URL', VALUE_OPTIONAL),
                     ]),
                     'Questions',
                     VALUE_OPTIONAL
@@ -230,7 +230,6 @@ class GetQuizQuestions extends external_api {
                     'calculated' => $variablesList ?? [],
                     'answers' => [],
                     '__addedanswers' => [],
-                    'image' => null
                 ];
             }
 
@@ -378,7 +377,15 @@ class GetQuizQuestions extends external_api {
                     }
                 }
 
-            } else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+            } else if($row->questiontype === 'essay'){
+                $essay = $DB->get_record('qtype_essay_options', ['questionid' => $questionid]);
+                $template = $essay->responsetemplate ?? '';
+
+                $quizzes_map[$quizid]['questions'][$questionid]['template'] = $template;
+            
+            }
+            
+            else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                 $answerdata = [
                     'answerid' => $answerid,
                     'options' => [
@@ -400,13 +407,25 @@ class GetQuizQuestions extends external_api {
         foreach ($quizzes_map as $quiz) {
             $quiz['quiztags'] = array_values($quiz['quiztags']);
             $quiz['quizcompetencies'] = array_values($quiz['quizcompetencies']);
+
             foreach ($quiz['questions'] as &$question) {
                 unset($question['__addedanswers']);
                 $question['answers'] = array_values($question['answers']);
+
+                if (empty($question['answers'])) {
+                    unset($question['answers']);
+                }
+
+                if (empty($question['calculated'])) {
+                    unset($question['calculated']);
+                }
             }
+
             $quiz['questions'] = array_values($quiz['questions']);
             $result[] = $quiz;
         }
-        return $result;
+
+        return self::remove_null_informations($result);
+
     }
 }

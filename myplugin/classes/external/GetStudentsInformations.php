@@ -15,6 +15,8 @@ use core_external\external_value;
 
 class GetStudentsInformations extends \core_external\external_api {
 
+
+    //Define o formato da respostas
     public static function execute_returns() {
         return new external_multiple_structure(
             new external_single_structure([
@@ -40,6 +42,7 @@ class GetStudentsInformations extends \core_external\external_api {
         );
     }
 
+    //Define os parâmentros que o webservice recebe
     public static function execute_parameters() {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'The course ID'),
@@ -53,6 +56,7 @@ class GetStudentsInformations extends \core_external\external_api {
         ]);
     }
 
+    //Remove as informações nulas
     private static function remove_null_informations(array $data) {
         foreach ($data as $key => $value) {
             if (is_array($value)) {
@@ -70,12 +74,15 @@ class GetStudentsInformations extends \core_external\external_api {
     public static function execute($courseid, $userids = [], $realuserid = 0) {
         global $DB, $USER;
 
+        //Validação dos parâmetros
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
             'userids' => $userids,
             'realuserid' => $realuserid
         ]);
 
+        //Determinar quem é o usuário efetivo
+        //Se foi enviado um realuserid ele substitui o $USER pelo usuário real
         $effectiveUser = $USER;
         if (!empty($params['realuserid'])) {
             $realuser = $DB->get_record('user', ['id' => $params['realuserid']], '*', IGNORE_MISSING);
@@ -84,9 +91,11 @@ class GetStudentsInformations extends \core_external\external_api {
             }
         }
 
+        //Valida o contexto do curo e confirma se o usuário tem permissão para acessar aquele curso
         $coursecontext = context_course::instance($params['courseid']);
         self::validate_context($coursecontext);
 
+        //Identifica o papel do usuário no curso em questão
         $roleuser = get_user_roles($coursecontext, $effectiveUser->id, true);
         $rolenames = array_map(fn($r) => $r->shortname, $roleuser);
 
@@ -99,26 +108,33 @@ class GetStudentsInformations extends \core_external\external_api {
         }
 
         if ($teacher) {
+            //Se for professor ele pode ver todos os alunos do curso
             if (empty($params['userids'])) {
                 $users = get_enrolled_users($coursecontext);
             } else {
+                //Ou somente alunos especificados
                 list($sql, $params_sql) = $DB->get_in_or_equal($params['userids'], SQL_PARAMS_NAMED, 'uid');
                 $fields = 'id, username, firstname, lastname, email, lastlogin, currentlogin, firstaccess';
                 $users = $DB->get_records_select('user', "id $sql", $params_sql, '', $fields);
             }
         } else {
+            //Se for estudante ele somente pode ver os seus dados
             $users = [$DB->get_record('user', ['id' => $effectiveUser->id], '*', MUST_EXIST)];
         }
 
         $result = [];
         foreach ($users as $u) {
+            //Monta o array de informações dos usuários
+            //Último acesso ao curso
             $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
                 'userid' => $u->id,
                 'courseid' => $params['courseid']
             ]) ?: 0;
 
+            //Foto de perfil
             $profileimage = (string)(new \moodle_url('/user/pix.php', ['id' => $u->id, 'size' => 1]));
 
+            //Tags do usuário
             $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
             $tags_data_user = [];
             foreach ($tags_users as $tag_user) {
@@ -143,6 +159,7 @@ class GetStudentsInformations extends \core_external\external_api {
             ];
         }
 
+        //Remove os valores nulos antes de retornar
         return array_map([self::class, 'remove_null_informations'], $result);
     }
 }

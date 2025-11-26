@@ -1,7 +1,10 @@
 <?php
+//Ativa a exibição de erros
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+//Lista de endipoints do moodle
+//chave -> valor
 $endpoints = [
     'get_activities_by_course'          => 'local_myplugin_get_activities_by_course',
     'get_activities_by_user'            => 'local_myplugin_get_activities_by_user',
@@ -12,6 +15,7 @@ $endpoints = [
     'get_students_informations'         => 'local_myplugin_get_students_informations',
 ];
 
+//Recebimento de variáveis vindas do POST do LTI
 $user_id = $_POST['user_id'] ?? null;
 $course_id = $_POST['course_id'] 
     ?? $_POST['context_id'] 
@@ -21,10 +25,13 @@ $roles = $_POST['roles'] ?? '';
 $lis_name = $_POST['lis_person_name_full'] ?? "Usuário desconhecido";
 $email = $_POST['lis_person_contact_email_primary'] ?? '';
 
+//Preparação das variáveis
 $response = null;
 $error = null;
 $selected_endpoint = $_POST['endpoint'] ?? null;
 
+//Tratamento ao enviar POST
+//Se o formulário for enviado ele valida se falta o userid, se o endpoint selecionado existe e se exige o courseId.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
     if (!$user_id) {
         $error = "Não foi possível identificar o usuário.";
@@ -33,16 +40,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
     } elseif (in_array($selected_endpoint, ['get_students_informations', 'get_activities_by_course', 'get_quiz_questions']) && !$course_id) {
         $error = "Este endpoint precisa de um course_id.";
     } else {
+
+        //Configuração da chamada ao Moodle. Configura a URL do servidor Moodle, token do WebService e a função a ser chamada.
         $moodle_url = 'http://127.0.0.1/moodle/webservice/rest/server.php';
         $token      = '53f6c6e36617a9dd47853f767baea388';
         $function   = $endpoints[$selected_endpoint];
 
+        //Montagem dos parâmetros para o Moodle
         $postfields = [
             'wstoken' => $token,
             'wsfunction' => $function,
             'moodlewsrestformat' => 'json',
         ];
 
+        //Parâmetros específicos por endpoint
         switch ($selected_endpoint) {
             case 'get_activities_by_user':
                 $postfields['userid'] = $user_id;
@@ -67,19 +78,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
                 break;
         }
 
+        //Envio da requisição cURL ao Moodle
         if(!$error){
+            //Inicializa a sessão cURL
             $ch = curl_init();
+
+            //Define a url para onde será mandada a requisição
             curl_setopt($ch, CURLOPT_URL, $moodle_url);
+
+            //Diz para cURL retornar a resposta em vez de abrir ela
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            //Informa que será um POST
             curl_setopt($ch, CURLOPT_POST, true);
+
+            //Envia os parâmetros da requisição
             curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
     
+            //excuta a requisição
             $raw_response = curl_exec($ch);
             if ($raw_response === false) {
                 $error = 'Erro CURL: ' . curl_error($ch);
             } else {
+                //Se não der erro ele decodifica o JSON
                 $response = json_decode($raw_response, true);
             }
+            //Fecha a conexão cURL
             curl_close($ch);
         }
     }
