@@ -233,7 +233,6 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-
             if ($row->questiontype === 'match') {
                 $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
                 foreach ($subquestions as $sub) {
@@ -383,9 +382,32 @@ class GetQuizQuestions extends external_api {
 
                 $quizzes_map[$quizid]['questions'][$questionid]['template'] = $template;
             
-            }
-            
-            else if (!is_null($answerid) && !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+            } else if($row->questiontype === 'multianswer'){
+
+                    $subquestions = $DB->get_records('question', ['parent' => $questionid]);
+
+                    $answersList = [];
+                    foreach ($subquestions as $sq) {
+                        $answersList[] = [
+                            'answerid' => (int)$sq->id,
+                            'options' => [
+                                [
+                                    'answerOption' => $sq->questiontext ?? ''
+                                ]
+                            ],
+                        ];
+                    }
+
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = $answersList;
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
+
+                    
+            } else if (
+                !is_null($answerid) &&
+                !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers']) &&
+                $row->questiontype !== 'randomsamatch' &&
+                $row->questiontype !== 'multichoice'
+            ) {
                 $answerdata = [
                     'answerid' => $answerid,
                     'options' => [
@@ -395,10 +417,10 @@ class GetQuizQuestions extends external_api {
                     ],
                     'fraction' => (float)$row->fraction
                 ];
-
                 $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
                 $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
             }
+
         }
 
         $records->close();
@@ -426,6 +448,5 @@ class GetQuizQuestions extends external_api {
         }
 
         return self::remove_null_informations($result);
-
     }
 }
