@@ -4,7 +4,7 @@ namespace local_myplugin\external;
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
-require_once("$CFG->dirroot/user/lib.php");
+require_once("$CFG->libdir/externallib.php");
 
 use context_course;
 use core_external\external_api;
@@ -12,46 +12,10 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use moodle_url;
+use core_files\file_storage;
 
-class GetStudentsInformations extends \core_external\external_api {
-
-    public static function execute_returns() {
-        return new external_multiple_structure(
-            new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'User ID'),
-                'username' => new external_value(PARAM_RAW, 'Username'),
-                'firstname' => new external_value(PARAM_RAW, 'First name'),
-                'lastname' => new external_value(PARAM_RAW, 'Last name'),
-                'email' => new external_value(PARAM_RAW, 'User email'),
-                'lastlogin' => new external_value(PARAM_INT, 'User last login timestamp'),
-                'currentlogin' => new external_value(PARAM_INT, 'User current login timestamp'),
-                'firstaccess' => new external_value(PARAM_INT, 'User first access timestamp'),
-                'lastcourseaccess' => new external_value(PARAM_INT, 'User last access time in this course', VALUE_OPTIONAL),
-                'profileimage' => new external_value(PARAM_RAW, 'User profile image url', VALUE_OPTIONAL),
-                'tags' => new external_multiple_structure(
-                    new external_single_structure([
-                        'tagid' => new external_value(PARAM_INT, 'Tag ID'),
-                        'tagname' => new external_value(PARAM_RAW, 'Tag name')
-                    ]),
-                    'User tags',
-                    VALUE_OPTIONAL
-                ),
-            ])
-        );
-    }
-
-    public static function execute_parameters() {
-        return new external_function_parameters([
-            'courseid' => new external_value(PARAM_INT, 'The course ID'),
-            'userids' => new external_multiple_structure(
-                new external_value(PARAM_INT, 'User ID'), 
-                'An array of user IDs', 
-                VALUE_DEFAULT, 
-                []
-            ),
-            'realuserid' => new external_value(PARAM_INT, 'The actual logged-in user ID', VALUE_DEFAULT, 0),
-        ]);
-    }
+class GetQuizQuestions extends external_api {
 
     private static function remove_null_informations(array $data) {
         foreach ($data as $key => $value) {
@@ -67,82 +31,434 @@ class GetStudentsInformations extends \core_external\external_api {
         return $data;
     }
 
-    public static function execute($courseid, $userids = [], $realuserid = 0) {
+    public static function execute_parameters() {
+        return new external_function_parameters([
+            'courseid' => new external_value(PARAM_INT, 'The course ID'),
+            'token' => new external_value(PARAM_RAW, "User token", VALUE_OPTIONAL)
+        ]);
+    }
+
+    public static function execute_returns() {
+        return new external_multiple_structure(
+            new external_single_structure([
+                'quizid' => new external_value(PARAM_INT, 'Quiz ID'),
+                'quizname' => new external_value(PARAM_RAW, 'Quiz name'),
+                'quiztags' => new external_multiple_structure(
+                    new external_single_structure([
+                        'tagid' => new external_value(PARAM_INT, 'Tag ID'),
+                        'tagname' => new external_value(PARAM_RAW, 'Tag name'),
+                    ]),
+                    'Quiz tags',
+                    VALUE_OPTIONAL
+                ),
+                'quizcompetencies' => new external_multiple_structure(
+                    new external_single_structure([
+                        'competencyid' => new external_value(PARAM_INT, 'Competency ID'),
+                        'competencyname' => new external_value(PARAM_RAW, 'Competency name'),
+                        'competencydesc' => new external_value(PARAM_RAW, 'Competency description', VALUE_OPTIONAL),
+                    ]),
+                    'Quiz competencies',
+                    VALUE_OPTIONAL
+                ),
+                'questions' => new external_multiple_structure(
+                    new external_single_structure([
+                        'questionid' => new external_value(PARAM_INT, 'Question ID'),
+                        'questionname' => new external_value(PARAM_RAW, 'Question name'),
+                        'qtype' => new external_value(PARAM_RAW, 'Question type'),
+                        'questiontext' => new external_value(PARAM_RAW, 'Question text'),
+                        'template' => new external_value(PARAM_RAW, 'Essay response template', VALUE_OPTIONAL),
+                        'calculated' => new external_multiple_structure(
+                            new external_single_structure([
+                                'variableid' => new external_value(PARAM_INT, 'Variable id'),
+                                'itemcount' => new external_value(PARAM_INT, 'quantity of items'),
+                                'variableName' => new external_value(PARAM_RAW, 'Variable name'),
+                                'items' => new external_multiple_structure(
+                                    new external_single_structure([
+                                        'itemid' => new external_value(PARAM_INT, 'Item id'),
+                                        'value' => new external_value(PARAM_FLOAT, 'Value item')
+                                    ]),
+                                    'Items',
+                                    VALUE_OPTIONAL
+                                ),
+                            ]),
+                            'Counted variables',
+                            VALUE_OPTIONAL
+                        ),
+                        'answers' => new external_multiple_structure(
+                            new external_single_structure([
+                                'answerid' => new external_value(PARAM_INT, 'Answer ID'),
+                                'options' => new external_multiple_structure(
+                                    new external_single_structure([
+                                        'answerOption' => new external_value(PARAM_RAW, 'Only one answer'),
+                                        'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL)
+                                    ]),
+                                    'Options',
+                                    VALUE_OPTIONAL
+                                ),
+                                'fraction' => new external_value(PARAM_FLOAT, 'Fraction (1=correct, 0=incorrect)', VALUE_OPTIONAL),
+                            ]),
+                            'Possible answers',
+                            VALUE_OPTIONAL
+                        ),
+                        'image' => new external_value(PARAM_URL, 'image URL', VALUE_OPTIONAL)
+                    ]),
+                    'Questions',
+                    VALUE_OPTIONAL
+                ),
+            ])
+        );
+    }
+
+    public static function execute($courseid, $token='') {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
-            'userids' => $userids,
-            'realuserid' => $realuserid
+            'token' => $token
         ]);
 
-        $effectiveUser = $USER;
-        if (!empty($params['realuserid'])) {
-            $realuser = $DB->get_record('user', ['id' => $params['realuserid']], '*', IGNORE_MISSING);
-            if ($realuser) {
-                $effectiveUser = $realuser;
+        $context = context_course::instance($params['courseid']);
+        self::validate_context($context);
+        require_capability('mod/quiz:view', $context);
+
+        $sql = "
+            WITH quiz_tags AS (
+                SELECT t.id AS tagid, t.name AS tagname, ti.itemid AS cmid
+                FROM {tag_instance} ti
+                JOIN {tag} t ON t.id = ti.tagid
+                WHERE ti.itemtype = 'course_modules'
+            )
+            SELECT 
+                q.id AS quizid,
+                q.name AS quizname,
+                qt.tagid,
+                qt.tagname,
+                c.id AS competencyid,
+                c.shortname AS competencyname,
+                c.description AS competencydesc,
+                qu.id AS questionid,
+                qu.name AS questionname,
+                qu.qtype AS questiontype,
+                qu.questiontext,
+                qc.contextid AS questioncontextid,
+                qa.id AS answerid,
+                qa.answer,
+                qa.fraction
+            FROM {course_modules} cm
+            JOIN {modules} m ON m.id = cm.module AND m.name = 'quiz'
+            JOIN {quiz} q ON q.id = cm.instance
+            LEFT JOIN quiz_tags qt ON qt.cmid = cm.id
+            LEFT JOIN {competency_modulecomp} mc ON mc.cmid = cm.id
+            LEFT JOIN {competency} c ON c.id = mc.competencyid
+            JOIN {quiz_slots} qs ON qs.quizid = q.id
+            JOIN {question_references} qr ON qr.itemid = qs.id AND qr.component = 'mod_quiz' AND qr.questionarea = 'slot'
+            JOIN {question_versions} qv ON qv.questionbankentryid = qr.questionbankentryid
+            JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
+            JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+            JOIN {question} qu ON qu.id = qv.questionid
+            LEFT JOIN {question_answers} qa ON qa.question = qu.id
+            WHERE cm.course = :courseid
+            AND qv.version = (
+                SELECT MAX(qv2.version)
+                FROM {question_versions} qv2
+                WHERE qv2.questionbankentryid = qv.questionbankentryid
+            )
+            ORDER BY q.id, qs.slot, qu.id, qa.id
+
+        ";
+
+        $records = $DB->get_recordset_sql($sql, ['courseid' => $params['courseid']]);
+        $quizzes_map = [];
+
+        foreach ($records as $row) {
+            if (empty($row->quizid)) {
+                continue;
             }
-        }
 
-        $coursecontext = context_course::instance($params['courseid']);
-        self::validate_context($coursecontext);
+            $quizid = (int)$row->quizid;
+            $questionid = (int)$row->questionid;
+            $answerid = isset($row->answerid) ? (int)$row->answerid : null;
 
-        $roleuser = get_user_roles($coursecontext, $effectiveUser->id, true);
-        $rolenames = array_map(fn($r) => $r->shortname, $roleuser);
-
-        $teacher = in_array('editingteacher', $rolenames) || in_array('teacher', $rolenames)
-            || in_array('manager', $rolenames) || is_siteadmin($effectiveUser);
-        $student = in_array('student', $rolenames) && !$teacher;
-
-        if (!is_enrolled($coursecontext, $effectiveUser->id)) {
-            throw new \moodle_exception('not enrolled in course', 'local_myplugin');
-        }
-
-        if ($teacher) {
-            if (empty($params['userids'])) {
-                $users = get_enrolled_users($coursecontext);
-            } else {
-                list($sql, $params_sql) = $DB->get_in_or_equal($params['userids'], SQL_PARAMS_NAMED, 'uid');
-                $fields = 'id, username, firstname, lastname, email, lastlogin, currentlogin, firstaccess';
-                $users = $DB->get_records_select('user', "id $sql", $params_sql, '', $fields);
-            }
-        } else {
-            $users = [$DB->get_record('user', ['id' => $effectiveUser->id], '*', MUST_EXIST)];
-        }
-
-        $result = [];
-        foreach ($users as $u) {
-            $lastcourseaccess = (int)$DB->get_field('user_lastaccess', 'timeaccess', [
-                'userid' => $u->id,
-                'courseid' => $params['courseid']
-            ]) ?: 0;
-
-            $profileimage = (string)(new \moodle_url('/user/pix.php', ['id' => $u->id, 'size' => 1]));
-
-            $tags_users = \core_tag_tag::get_item_tags('core', 'user', $u->id);
-            $tags_data_user = [];
-            foreach ($tags_users as $tag_user) {
-                $tags_data_user[] = [
-                    'tagid' => $tag_user->id,
-                    'tagname' => $tag_user->get_display_name(),
+            if (!isset($quizzes_map[$quizid])) {
+                $quizzes_map[$quizid] = [
+                    'quizid' => $quizid,
+                    'quizname' => $row->quizname ?? '',
+                    'quiztags' => [],
+                    'quizcompetencies' => [],
+                    'questions' => [],
                 ];
             }
 
-            $result[] = [
-                'id' => (int)$u->id,
-                'username' => $u->username,
-                'firstname' => $u->firstname,
-                'lastname' => $u->lastname,
-                'email' => $u->email,
-                'lastlogin' => (int)($u->lastlogin ?? 0),
-                'currentlogin' => (int)($u->currentlogin ?? 0),
-                'firstaccess' => (int)($u->firstaccess ?? 0),
-                'lastcourseaccess' => $lastcourseaccess,
-                'profileimage' => $profileimage,
-                'tags' => $tags_data_user
-            ];
+            if (!is_null($row->tagid)) {
+                $quizzes_map[$quizid]['quiztags'][$row->tagid] = [
+                    'tagid' => (int)$row->tagid,
+                    'tagname' => $row->tagname ?? '',
+                ];
+            }
+
+            if (!is_null($row->competencyid)) {
+                $quizzes_map[$quizid]['quizcompetencies'][$row->competencyid] = [
+                    'competencyid' => (int)$row->competencyid,
+                    'competencyname' => $row->competencyname ?? '',
+                    'competencydesc' => $row->competencydesc ?? '',
+                ];
+            }
+
+            if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
+                $variablesList = [];
+
+                $datasets = $DB->get_records('question_datasets', ['question' => $questionid]);
+
+                foreach ($datasets as $dataset) {
+                    $definition = $DB->get_record('question_dataset_definitions', ['id' => $dataset->datasetdefinition]);
+                    if (!$definition) {
+                        continue;
+                    }
+
+                    $items = $DB->get_records('question_dataset_items', ['definition' => $definition->id]);
+
+                    $itemsList = [];
+                    foreach ($items as $item) {
+                        $itemsList[] = [
+                            'itemid' => (int)$item->id,
+                            'value' => (float)$item->value
+                        ];
+                    }
+
+                    $variable = [
+                        'variableid' => (int)$definition->id,
+                        'itemcount' => (int)$definition->itemcount,
+                        'variableName' => $definition->name,
+                        'items' => $itemsList,
+                    ];
+
+                    $variablesList[] = $variable;
+                }
+
+                $quizzes_map[$quizid]['questions'][$questionid] = [
+                    'questionid' => $questionid,
+                    'questionname' => $row->questionname ?? '',
+                    'qtype' => $row->questiontype ?? '',
+                    'questiontext' => $row->questiontext ?? '',
+                    'calculated' => $variablesList ?? [],
+                    'answers' => [],
+                    '__addedanswers' => [],
+                    'image' => null,
+                ];
+            }
+
+            if ($row->questiontype === 'match') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
+                $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
+                foreach ($subquestions as $sub) {
+                    $answerdata = [
+                        'answerid' => (int)$sub->id,
+                        'options' => [
+                            [
+                                'answerOption' => $sub->questiontext ?? '',
+                                'answertext' => $sub->answertext ?? '',
+                            ]
+                        ],
+                        'fraction' => 1.0
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$sub->id;
+                }
+
+            } else if ($row->questiontype === 'ddmarker') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
+                $answeroptions = $DB->get_records('qtype_ddmarker_drags', ['questionid' => $questionid]);
+
+                foreach ($answeroptions as $option) {
+                    if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+                        continue;
+                    }
+
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = [
+                        'answerid' => (int)$option->id,
+                        'options' => [
+                            [
+                                'answerOption' => $option->label ?? '',
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$option->id;
+                }
+
+                if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
+                    $question = $DB->get_record('question', ['id' => $questionid], '*', MUST_EXIST);
+                    $questioncontext = \context::instance_by_id($row->questioncontextid);
+                    $token = $params['token'] ?? '';
+
+                    $fs = get_file_storage();
+
+                    $files = $fs->get_area_files(
+                        $questioncontext->id,
+                        'qtype_ddmarker',
+                        'bgimage',
+                        false,
+                        'filename',
+                        false
+                    );
+
+                    foreach ($files as $file) {
+                        if (!$file->is_directory()) {
+                            $url = moodle_url::make_pluginfile_url(
+                                $file->get_contextid(),
+                                $file->get_component(),
+                                $file->get_filearea(),
+                                $file->get_itemid(),
+                                $file->get_filepath(),
+                                $file->get_filename(),
+                                true
+                            )->out(false);
+
+                            if (!empty($token)) {
+                                $url .= (strpos($url, '?') === false ? '?' : '&') . 'token=' . $token;
+                            }
+                            $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                            break;
+                        }
+                    }
+                }
+
+            } else if ($row->questiontype === 'ddimageortext') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
+                $answeroptions = $DB->get_records('qtype_ddimageortext_drags', ['questionid' => $questionid]);
+
+                foreach ($answeroptions as $option) {
+                    if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
+                        continue;
+                    }
+
+                    $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = [
+                        'answerid' => (int)$option->id,
+                        'options' => [
+                            [
+                                'answerOption' => $option->label ?? '',
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$option->id;
+                }
+
+                if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
+                    $fs = get_file_storage();
+                    $questioncontext = \context::instance_by_id($row->questioncontextid);
+
+                    $token = $params['token'] ?? '';
+
+                    $files = $fs->get_area_files(
+                        $questioncontext->id,
+                        'qtype_ddimageortext',
+                        'bgimage',
+                        false,
+                        'filename',
+                        false
+                    );
+
+                    foreach ($files as $file) {
+                        if (!$file->is_directory()) {
+                            $url = moodle_url::make_pluginfile_url(
+                                $file->get_contextid(),
+                                $file->get_component(),
+                                $file->get_filearea(),
+                                $file->get_itemid(),
+                                $file->get_filepath(),
+                                $file->get_filename(),
+                                true
+                            )->out(false);
+
+
+                            if (!empty($token)) {
+                                $url .= (strpos($url, '?') === false ? '?' : '&') . 'token=' . $token;
+                            }
+                            $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                            break;
+                        }
+                    }
+                }
+
+            } else if ($row->questiontype === 'essay') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
+                $essay = $DB->get_record('qtype_essay_options', ['questionid' => $questionid]);
+                $template = $essay->responsetemplate ?? '';
+
+                $quizzes_map[$quizid]['questions'][$questionid]['template'] = $template;
+
+            } else if ($row->questiontype === 'multianswer') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
+                $subquestions = $DB->get_records('question', ['parent' => $questionid]);
+
+                $answersList = [];
+                foreach ($subquestions as $sq) {
+                    $answersList[] = [
+                        'answerid' => (int)$sq->id,
+                        'options' => [
+                            [
+                                'answerOption' => $sq->questiontext ?? ''
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$sq->id;
+                }
+
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = $answersList;
+
+            } else if (
+                !in_array($row->questiontype, ['match','ddmarker','ddimageortext','multianswer','essay']) &&
+                !is_null($answerid) &&
+                !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])
+            ) {
+                $answerdata = [
+                    'answerid' => $answerid,
+                    'options' => [
+                        [
+                            'answerOption' => $row->answer ?? '',
+                        ]
+                    ],
+                    'fraction' => (float)($row->fraction ?? 0)
+                ];
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
+            }
+
         }
 
-        return array_map([self::class, 'remove_null_informations'], $result);
+        $records->close();
+
+        $result = [];
+        foreach ($quizzes_map as $quiz) {
+            $quiz['quiztags'] = array_values($quiz['quiztags']);
+            $quiz['quizcompetencies'] = array_values($quiz['quizcompetencies']);
+
+            foreach ($quiz['questions'] as &$question) {
+                unset($question['__addedanswers']);
+                $question['answers'] = array_values($question['answers']);
+
+                if (empty($question['answers'])) {
+                    unset($question['answers']);
+                }
+
+                if (empty($question['calculated'])) {
+                    unset($question['calculated']);
+                }
+            }
+
+            $quiz['questions'] = array_values($quiz['questions']);
+            $result[] = $quiz;
+        }
+
+        return self::remove_null_informations($result);
     }
 }

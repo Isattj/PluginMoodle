@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
                 break;
             case 'get_quiz_questions':
                 $postfields['courseid'] = $course_id;
+                $postfields['token'] = $token;
                 break;
             default:
                 $error = "Endpoint não configurado corretamente.";
