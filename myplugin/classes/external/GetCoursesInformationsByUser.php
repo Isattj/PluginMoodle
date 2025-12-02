@@ -65,6 +65,10 @@ class GetCoursesInformationsByUser extends external_api {
                     'Competencies from course',
                     VALUE_OPTIONAL
                 ),
+                'category' => new external_single_structure([
+                    'categoryid' => new external_value(PARAM_INT, 'Category ID'),
+                    'categoryname' => new external_value(PARAM_RAW, 'Category name'),
+                ], 'Course category', VALUE_OPTIONAL),
                 'users' => new external_multiple_structure(
                     new external_single_structure([
                         'id' => new external_value(PARAM_INT, 'User ID'),
@@ -159,6 +163,17 @@ class GetCoursesInformationsByUser extends external_api {
                 }
             }
 
+
+            $courseInformations = $DB->get_record('course', ['id' => $course->id]);
+            $categoryid = $courseInformations->category;
+
+            $categoryInformations = $DB->get_record('course_categories', ['id' => $categoryid]);
+            $categoryData = [];
+            $category = [
+                'categoryid' => (int)$categoryInformations->id,
+                'categoryname' => $categoryInformations->name,
+            ];
+
             $enrolled_users = get_enrolled_users($context, '', 0,
                 'u.id, u.username, u.firstname, u.lastname, u.email, u.lastlogin, u.currentlogin, u.firstaccess'
             );
@@ -231,6 +246,7 @@ class GetCoursesInformationsByUser extends external_api {
                 'shortname' => $course->shortname,
                 'tags' => $tags_data,
                 'competencies' => $competencies_data,
+                'category' => $category,
                 'users' => $users_data,
             ];
 
