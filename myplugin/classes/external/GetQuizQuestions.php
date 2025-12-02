@@ -34,6 +34,7 @@ class GetQuizQuestions extends external_api {
     public static function execute_parameters() {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'The course ID'),
+            'token' => new external_value(PARAM_RAW, "User token", VALUE_OPTIONAL)
         ]);
     }
 
@@ -65,6 +66,10 @@ class GetQuizQuestions extends external_api {
                         'questionname' => new external_value(PARAM_RAW, 'Question name'),
                         'qtype' => new external_value(PARAM_RAW, 'Question type'),
                         'questiontext' => new external_value(PARAM_RAW, 'Question text'),
+                        'category' => new external_single_structure([
+                                'categoryid' => new external_value(PARAM_INT, 'Category ID'),
+                                'categoryname' => new external_value(PARAM_RAW, 'Category name'),
+                        ]),
                         'template' => new external_value(PARAM_RAW, 'Essay response template', VALUE_OPTIONAL),
                         'calculated' => new external_multiple_structure(
                             new external_single_structure([
@@ -99,6 +104,7 @@ class GetQuizQuestions extends external_api {
                             'Possible answers',
                             VALUE_OPTIONAL
                         ),
+                        'image' => new external_value(PARAM_URL, 'image URL', VALUE_OPTIONAL)
                     ]),
                     'Questions',
                     VALUE_OPTIONAL
@@ -107,10 +113,13 @@ class GetQuizQuestions extends external_api {
         );
     }
 
-    public static function execute($courseid) {
+    public static function execute($courseid, $token='') {
         global $DB, $USER;
 
-        $params = self::validate_parameters(self::execute_parameters(), ['courseid' => $courseid]);
+        $params = self::validate_parameters(self::execute_parameters(), [
+            'courseid' => $courseid,
+            'token' => $token
+        ]);
 
         $context = context_course::instance($params['courseid']);
         self::validate_context($context);
@@ -135,9 +144,12 @@ class GetQuizQuestions extends external_api {
                 qu.name AS questionname,
                 qu.qtype AS questiontype,
                 qu.questiontext,
+                qc.contextid AS questioncontextid,
                 qa.id AS answerid,
                 qa.answer,
-                qa.fraction
+                qa.fraction,
+                qc.id AS categoryid,
+                qc.name AS categoryname
             FROM {course_modules} cm
             JOIN {modules} m ON m.id = cm.module AND m.name = 'quiz'
             JOIN {quiz} q ON q.id = cm.instance
@@ -147,10 +159,18 @@ class GetQuizQuestions extends external_api {
             JOIN {quiz_slots} qs ON qs.quizid = q.id
             JOIN {question_references} qr ON qr.itemid = qs.id AND qr.component = 'mod_quiz' AND qr.questionarea = 'slot'
             JOIN {question_versions} qv ON qv.questionbankentryid = qr.questionbankentryid
+            JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
+            JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
             JOIN {question} qu ON qu.id = qv.questionid
             LEFT JOIN {question_answers} qa ON qa.question = qu.id
             WHERE cm.course = :courseid
+            AND qv.version = (
+                SELECT MAX(qv2.version)
+                FROM {question_versions} qv2
+                WHERE qv2.questionbankentryid = qv.questionbankentryid
+            )
             ORDER BY q.id, qs.slot, qu.id, qa.id
+
         ";
 
         $records = $DB->get_recordset_sql($sql, ['courseid' => $params['courseid']]);
@@ -190,7 +210,6 @@ class GetQuizQuestions extends external_api {
                 ];
             }
 
-
             if (!isset($quizzes_map[$quizid]['questions'][$questionid])) {
                 $variablesList = [];
 
@@ -227,13 +246,21 @@ class GetQuizQuestions extends external_api {
                     'questionname' => $row->questionname ?? '',
                     'qtype' => $row->questiontype ?? '',
                     'questiontext' => $row->questiontext ?? '',
+                    'category' => [
+                        'categoryid' => (int)$row->categoryid,
+                        'categoryname' => $row->categoryname ?? ''
+                    ],
                     'calculated' => $variablesList ?? [],
                     'answers' => [],
                     '__addedanswers' => [],
+                    'image' => null,
                 ];
             }
 
             if ($row->questiontype === 'match') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
                 $subquestions = $DB->get_records('qtype_match_subquestions', ['questionid' => $questionid]);
                 foreach ($subquestions as $sub) {
                     $answerdata = [
@@ -247,13 +274,17 @@ class GetQuizQuestions extends external_api {
                         'fraction' => 1.0
                     ];
                     $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$sub->id;
                 }
 
-            }  else if($row->questiontype === 'ddmarker'){
+            }  else if ($row->questiontype === 'ddmarker') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
                 $answeroptions = $DB->get_records('qtype_ddmarker_drags', ['questionid' => $questionid]);
 
                 foreach ($answeroptions as $option) {
-                    if(in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])){
+                    if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                         continue;
                     }
 
@@ -270,54 +301,41 @@ class GetQuizQuestions extends external_api {
 
                 if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
 
-                    $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+                    $fs = get_file_storage();
+                    $questioncontext = \context::instance_by_id($row->questioncontextid);
 
-                    if (!empty($question->category)) {
-                        $category = $DB->get_record('question_categories', ['id' => $question->category]);
+                    $files = $fs->get_area_files($questioncontext->id, 'qtype_ddmarker', 'bgimage', $questionid, 'filename', false);
 
-                        if($category){
-                            $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
-
-                            $category = $DB->get_record('question_categories', ['id' => $question->category], '*', MUST_EXIST);
-
-                            $context = \context::instance_by_id($category->contextid);
-
-                            $fs = get_file_storage();
-
-                            $files = $fs->get_area_files(
-                                $context->id,
-                                'qtype_' . $row->questiontype,
-                                'bgimage',
-                                0,
-                                'filename',
-                                false
-                            );
-
-                            foreach ($files as $file) {
-                                if (!$file->is_directory()) {
-                                    $url = moodle_url::make_pluginfile_url(
-                                        $file->get_contextid(),
-                                        $file->get_component(),
-                                        $file->get_filearea(),
-                                        $file->get_itemid(),
-                                        $file->get_filepath(),
-                                        $file->get_filename()
-                                    )->out(false);
-
-                                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
-                                    break;
-                                }
-                            }
-                        }
+                    foreach ($files as $file) {
+                        if ($file->is_directory()) {
+                        continue;
                     }
+                    $url = moodle_url::make_pluginfile_url(
+                        $file->get_contextid(),
+                        $file->get_component(),
+                        $file->get_filearea(),
+                        $file->get_itemid(),
+                        $file->get_filepath(),
+                        $file->get_filename()
+                    )->out(false);
+
+                    if (!empty($token)) {
+                        $url .= '&token=' . $token; 
+                    }
+                    
+                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                    break;
                 }
+            }
 
+            } else if ($row->questiontype === 'ddimageortext') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
 
-            } else if($row->questiontype === 'ddimageortext'){
                 $answeroptions = $DB->get_records('qtype_ddimageortext_drags', ['questionid' => $questionid]);
 
                 foreach ($answeroptions as $option) {
-                    if(in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])){
+                    if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
                         continue;
                     }
 
@@ -334,79 +352,67 @@ class GetQuizQuestions extends external_api {
 
                 if ($quizzes_map[$quizid]['questions'][$questionid]['image'] === null) {
 
-                    $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+                    $fs = get_file_storage();
+                    $questioncontext = \context::instance_by_id($row->questioncontextid);
 
-                    if (!empty($question->category)) {
-                        $category = $DB->get_record('question_categories', ['id' => $question->category]);
+                    $files = $fs->get_area_files($questioncontext->id, 'qtype_ddimageortext', 'bgimage', $questionid, 'filename', false);
 
-                        if($category){
-                            $question = $DB->get_record('question', ['id'=>$questionid], '*', MUST_EXIST);
+                    foreach ($files as $file) {
+                        if ($file->is_directory()) {
+                        continue;
+                    }
+                    $url = moodle_url::make_pluginfile_url(
+                        $file->get_contextid(),
+                        $file->get_component(),
+                        $file->get_filearea(),
+                        $file->get_itemid(),
+                        $file->get_filepath(),
+                        $file->get_filename()
+                    )->out(false);
 
-                            $category = $DB->get_record('question_categories', ['id' => $question->category], '*', MUST_EXIST);
+                    if (!empty($token)) {
+                        $url .= '&token=' . $token; 
+                    }
 
-                            $context = \context::instance_by_id($category->contextid);
-
-                            $fs = get_file_storage();
-
-                            $files = $fs->get_area_files(
-                                $context->id,
-                                'question',
-                                'bgimage',
-                                $questionid,
-                                'filename',
-                                false
-                            );
-
-                            foreach ($files as $file) {
-                                if (!$file->is_directory()) {
-                                    $url = moodle_url::make_pluginfile_url(
-                                        $file->get_contextid(),
-                                        $file->get_component(),
-                                        $file->get_filearea(),
-                                        $file->get_itemid(),
-                                        $file->get_filepath(),
-                                        $file->get_filename()
-                                    )->out(false);
-
-                                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
-                                    break;
-                                }
-                            }
-                        }
+                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                    break;
                     }
                 }
 
-            } else if($row->questiontype === 'essay'){
+            } else if ($row->questiontype === 'essay') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
+
                 $essay = $DB->get_record('qtype_essay_options', ['questionid' => $questionid]);
                 $template = $essay->responsetemplate ?? '';
 
                 $quizzes_map[$quizid]['questions'][$questionid]['template'] = $template;
-            
-            } else if($row->questiontype === 'multianswer'){
 
-                    $subquestions = $DB->get_records('question', ['parent' => $questionid]);
+            } else if ($row->questiontype === 'multianswer') {
+                $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
+                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
 
-                    $answersList = [];
-                    foreach ($subquestions as $sq) {
-                        $answersList[] = [
-                            'answerid' => (int)$sq->id,
-                            'options' => [
-                                [
-                                    'answerOption' => $sq->questiontext ?? ''
-                                ]
-                            ],
-                        ];
-                    }
+                $subquestions = $DB->get_records('question', ['parent' => $questionid]);
+
+                $answersList = [];
+                foreach ($subquestions as $sq) {
+                    $answersList[] = [
+                        'answerid' => (int)$sq->id,
+                        'options' => [
+                            [
+                                'answerOption' => $sq->questiontext ?? ''
+                            ]
+                        ],
+                    ];
+                    $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = (int)$sq->id;
+                }
 
                 $quizzes_map[$quizid]['questions'][$questionid]['answers'] = $answersList;
-                $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
 
-                    
             } else if (
+                !in_array($row->questiontype, ['match','ddmarker','ddimageortext','multianswer','essay']) &&
                 !is_null($answerid) &&
-                !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers']) &&
-                $row->questiontype !== 'randomsamatch' &&
-                $row->questiontype !== 'multichoice'
+                !in_array($answerid, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])
             ) {
                 $answerdata = [
                     'answerid' => $answerid,
@@ -415,7 +421,7 @@ class GetQuizQuestions extends external_api {
                             'answerOption' => $row->answer ?? '',
                         ]
                     ],
-                    'fraction' => (float)$row->fraction
+                    'fraction' => (float)($row->fraction ?? 0)
                 ];
                 $quizzes_map[$quizid]['questions'][$questionid]['answers'][] = $answerdata;
                 $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'][] = $answerid;
