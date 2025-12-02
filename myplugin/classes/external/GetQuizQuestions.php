@@ -308,25 +308,23 @@ class GetQuizQuestions extends external_api {
 
                     foreach ($files as $file) {
                         if ($file->is_directory()) {
-                        continue;
-                    }
-                    $url = moodle_url::make_pluginfile_url(
-                        $file->get_contextid(),
-                        $file->get_component(),
-                        $file->get_filearea(),
-                        $file->get_itemid(),
-                        $file->get_filepath(),
-                        $file->get_filename()
-                    )->out(false);
+                            continue;
+                        }
+                        $filearea = ($file->get_component() === 'qtype_ddmarker') ? 'ddmarker' : 'ddimageortext';
 
-                    if (!empty($token)) {
-                        $url .= '&token=' . $token; 
+                        $url = moodle_url::make_pluginfile_url(
+                            $file->get_contextid(),
+                            'local_myplugin',
+                            $filearea, 
+                            $file->get_itemid(),    
+                            $file->get_filepath(),     
+                            $file->get_filename()
+                        )->out(false);
+
+                        $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                        break;
                     }
-                    
-                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
-                    break;
                 }
-            }
 
             } else if ($row->questiontype === 'ddimageortext') {
                 $quizzes_map[$quizid]['questions'][$questionid]['answers'] = [];
@@ -359,23 +357,21 @@ class GetQuizQuestions extends external_api {
 
                     foreach ($files as $file) {
                         if ($file->is_directory()) {
-                        continue;
-                    }
-                    $url = moodle_url::make_pluginfile_url(
-                        $file->get_contextid(),
-                        $file->get_component(),
-                        $file->get_filearea(),
-                        $file->get_itemid(),
-                        $file->get_filepath(),
-                        $file->get_filename()
-                    )->out(false);
+                            continue;
+                        }
+                        $filearea = ($file->get_component() === 'qtype_ddimageortext') ? 'ddimageortext' : 'ddmarker';
 
-                    if (!empty($token)) {
-                        $url .= '&token=' . $token; 
-                    }
+                        $url = moodle_url::make_pluginfile_url(
+                            $file->get_contextid(),
+                            'local_myplugin',
+                            $filearea, 
+                            $file->get_itemid(),    
+                            $file->get_filepath(),     
+                            $file->get_filename()
+                        )->out(false);
 
-                    $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
-                    break;
+                        $quizzes_map[$quizid]['questions'][$questionid]['image'] = $url;
+                        break;
                     }
                 }
 
