@@ -94,7 +94,10 @@ class GetQuizQuestions extends external_api {
                                 'options' => new external_multiple_structure(
                                     new external_single_structure([
                                         'answerOption' => new external_value(PARAM_RAW, 'Only one answer'),
-                                        'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL)
+                                        'answertext' => new external_value(PARAM_RAW, 'Correspondent answer', VALUE_OPTIONAL),
+                                        'coords' => new external_value(PARAM_RAW, 'Coordinates', VALUE_OPTIONAL),
+                                        'coordinationX' => new external_value(PARAM_INT, 'X coordination', VALUE_OPTIONAL),
+                                        'coordinationY' => new external_value(PARAM_INT, 'Y coordination', VALUE_OPTIONAL),
                                     ]),
                                     'Options',
                                     VALUE_OPTIONAL
@@ -282,6 +285,7 @@ class GetQuizQuestions extends external_api {
                 $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
 
                 $answeroptions = $DB->get_records('qtype_ddmarker_drags', ['questionid' => $questionid]);
+                $dropsinformations = $DB->get_records('qtype_ddmarker_drops', ['questionid' => $questionid]);
 
                 foreach ($answeroptions as $option) {
                     if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
@@ -293,6 +297,7 @@ class GetQuizQuestions extends external_api {
                         'options' => [
                             [
                                 'answerOption' => $option->label ?? '',
+                                'coords' => isset($dropsinformations[$option->id]) ? $dropsinformations[$option->id]->coords : null,
                             ]
                         ],
                     ];
@@ -331,6 +336,7 @@ class GetQuizQuestions extends external_api {
                 $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'] = [];
 
                 $answeroptions = $DB->get_records('qtype_ddimageortext_drags', ['questionid' => $questionid]);
+                $dropsinformations = $DB->get_records('qtype_ddimageortext_drops', ['questionid' => $questionid]);
 
                 foreach ($answeroptions as $option) {
                     if (in_array($option->id, $quizzes_map[$quizid]['questions'][$questionid]['__addedanswers'])) {
@@ -342,6 +348,8 @@ class GetQuizQuestions extends external_api {
                         'options' => [
                             [
                                 'answerOption' => $option->label ?? '',
+                                'coordinationX' => isset($dropsinformations[$option->id]) ? (int)$dropsinformations[$option->id]->xleft : null,
+                                'coordinationY' => isset($dropsinformations[$option->id]) ? (int)$dropsinformations[$option->id]->ytop : null,
                             ]
                         ],
                     ];
